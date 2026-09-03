@@ -17,12 +17,14 @@ const labels: Record<string, string> = {
   TELEFONE: "Telefone",
   VIDEO_CHAMADA: "Vídeo",
   PRESENCIAL: "Presencial",
+  LIVE: "Live",
 };
 const colors: Record<string, string> = {
   WHATSAPP: "bg-emerald-100 text-emerald-700",
   TELEFONE: "bg-blue-100 text-blue-700",
   VIDEO_CHAMADA: "bg-violet-100 text-violet-700",
   PRESENCIAL: "bg-amber-100 text-amber-700",
+  LIVE: "bg-fuchsia-100 text-fuchsia-700",
 };
 type Params = {
   q?: string;

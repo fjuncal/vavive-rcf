@@ -11,7 +11,7 @@ export type ContactChannel =
   "WHATSAPP" | "TELEFONE" | "VIDEO_CHAMADA" | "PRESENCIAL";
 type Recent = {
   id: string;
-  type: ContactChannel;
+  type: ContactChannel | "LIVE";
   contactedAt: string;
   user: { name: string };
 };
@@ -21,11 +21,12 @@ const channels = [
   { type: "VIDEO_CHAMADA", label: "Vídeo", icon: Video },
   { type: "PRESENCIAL", label: "Presencial", icon: Users },
 ] as const;
-const labels: Record<ContactChannel, string> = {
+const labels: Record<Recent["type"], string> = {
   WHATSAPP: "WhatsApp",
   TELEFONE: "Telefone",
   VIDEO_CHAMADA: "Vídeo",
   PRESENCIAL: "Presencial",
+  LIVE: "Live",
 };
 const date = (value: string) =>
   new Date(value).toLocaleDateString("pt-BR", {
@@ -138,7 +139,12 @@ export function QuickContactButtons({
       </div>
       {undo && (
         <div className="fixed bottom-6 left-1/2 z-50 flex w-[min(92vw,580px)] -translate-x-1/2 items-center justify-between gap-5 rounded-2xl border border-[#b8ee35]/50 bg-[#003b71] px-5 py-4 text-white shadow-2xl">
-          <span><b className="block text-base">Contato registrado</b><small className="text-white/70">Toque em desfazer se foi engano. Disponível por 15 segundos.</small></span>
+          <span>
+            <b className="block text-base">Contato registrado</b>
+            <small className="text-white/70">
+              Toque em desfazer se foi engano. Disponível por 15 segundos.
+            </small>
+          </span>
           <button
             onClick={undoLast}
             className="rounded-xl bg-[#b8ee35] px-5 py-3 font-bold text-[#003b71]"

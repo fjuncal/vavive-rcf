@@ -6,6 +6,7 @@ import {
   BarChart3,
   Building2,
   LayoutDashboard,
+  Radio,
   MonitorPlay,
   Settings2,
   Users,
@@ -14,6 +15,7 @@ const items = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/franqueados", label: "Franqueados", icon: Users },
   { href: "/contatos", label: "Contatos", icon: BarChart3 },
+  { href: "/lives", label: "Lives", icon: Radio },
   { href: "/tv/modo", label: "Modo TV", icon: MonitorPlay },
 ];
 export function AppSidebar({
@@ -25,7 +27,9 @@ export function AppSidebar({
   return (
     <aside className="flex w-64 shrink-0 flex-col bg-[#003b71] text-white sm:w-72">
       <div className="flex items-center gap-3 border-b border-white/10 px-6 py-6">
-        <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-white"><VaviveLogo className="h-12 w-12" /></div>
+        <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-white">
+          <VaviveLogo className="h-12 w-12" />
+        </div>
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[.25em] text-[#b8ee35]">
             Central de suporte

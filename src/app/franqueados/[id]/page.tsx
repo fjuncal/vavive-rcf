@@ -16,7 +16,12 @@ export default async function FranchiseeDetailPage({
     include: {
       contacts: {
         orderBy: { contactedAt: "desc" },
-        include: { user: { select: { name: true } } },
+        include: {
+          user: { select: { name: true } },
+          liveParticipant: {
+            include: { live: { select: { id: true, title: true } } },
+          },
+        },
       },
     },
   });
@@ -38,6 +43,8 @@ export default async function FranchiseeDetailPage({
     PRESENCIAL: franchisee.contacts.filter(
       (contact) => contact.type === "PRESENCIAL",
     ).length,
+    LIVE: franchisee.contacts.filter((contact) => contact.type === "LIVE")
+      .length,
   };
 
   const qualifiedCount =
@@ -93,7 +100,7 @@ export default async function FranchiseeDetailPage({
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-6">
         {Object.entries(summary).map(([key, value]) => (
           <div
             key={key}
@@ -145,6 +152,14 @@ export default async function FranchiseeDetailPage({
                   <p className="mt-3 text-sm text-slate-600">
                     “{contact.notes}”
                   </p>
+                ) : null}
+                {contact.liveParticipant ? (
+                  <Link
+                    href={`/lives/${contact.liveParticipant.live.id}`}
+                    className="mt-3 inline-flex text-sm font-semibold text-[#0b8f45] hover:underline"
+                  >
+                    Ver Live: {contact.liveParticipant.live.title}
+                  </Link>
                 ) : null}
               </div>
             ))

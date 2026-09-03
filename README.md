@@ -32,7 +32,15 @@ A TV é interativa: seleciona franqueados, mostra indicadores e grava WhatsApp, 
 
 ## Fotos e deploy
 
-Em desenvolvimento, as fotos são gravadas em `public/uploads`. Isso não é persistente na Vercel; em produção o upload é bloqueado até que `src/lib/storage.ts` seja conectado a um storage persistente, como Vercel Blob. Apenas a URL deve ser salva no PostgreSQL. Use PostgreSQL gerenciado em produção.
+Em desenvolvimento (`NODE_ENV=development`), as fotos são gravadas em `public/uploads` e a URL relativa é salva em `Franchisee.photoUrl`.
+
+Em produção (`NODE_ENV=production`), o upload é feito no servidor com [Vercel Blob](https://vercel.com/docs/storage/vercel-blob) e apenas a URL pública retornada pelo Blob é salva em `Franchisee.photoUrl`. Crie/conecte um Blob Store ao projeto Vercel e configure a variável de ambiente abaixo no painel da Vercel (Production):
+
+```env
+BLOB_READ_WRITE_TOKEN="vercel_blob_rw_seu_token"
+```
+
+O token nunca é enviado ao navegador: ele é usado somente no handler de upload do servidor. Os formatos aceitos continuam sendo JPG, PNG e WebP, com limite de 5 MB. Em produção, não use o filesystem da Vercel para uploads, pois ele não é persistente.
 
 ## Validação
 

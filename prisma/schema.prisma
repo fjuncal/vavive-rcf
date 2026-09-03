@@ -24,6 +24,7 @@ enum ContactType {
   TELEFONE
   VIDEO_CHAMADA
   PRESENCIAL
+  LIVE
 }
 
 model User {
@@ -36,8 +37,10 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  contacts Contact[]
-  sessions Session[]
+  contacts     Contact[]
+  sessions     Session[]
+  hostedLives  Live[]    @relation("LiveHost")
+  createdLives Live[]    @relation("LiveCreator")
 }
 
 model Session {
@@ -61,9 +64,41 @@ model Franchisee {
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
 
-  contacts Contact[]
+  contacts           Contact[]
+  liveParticipations LiveParticipant[]
 
   @@map("franchisees")
+}
+
+model Live {
+  id              String            @id @default(cuid())
+  title           String
+  scheduledAt     DateTime
+  notes           String?
+  hostUser        User              @relation("LiveHost", fields: [hostUserId], references: [id])
+  hostUserId      String
+  createdByUser   User              @relation("LiveCreator", fields: [createdByUserId], references: [id])
+  createdByUserId String
+  participants    LiveParticipant[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([scheduledAt])
+  @@index([hostUserId])
+}
+
+model LiveParticipant {
+  id           String     @id @default(cuid())
+  live         Live       @relation(fields: [liveId], references: [id], onDelete: Cascade)
+  liveId       String
+  franchisee   Franchisee @relation(fields: [franchiseeId], references: [id])
+  franchiseeId String
+  contact      Contact    @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  contactId    String     @unique
+  createdAt    DateTime   @default(now())
+
+  @@unique([liveId, franchiseeId])
+  @@index([franchiseeId])
 }
 
 model Contact {
@@ -77,6 +112,8 @@ model Contact {
   notes        String?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
+
+  liveParticipant LiveParticipant?
 
   @@index([franchiseeId, contactedAt])
   @@index([contactedAt, type])

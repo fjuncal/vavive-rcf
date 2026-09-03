@@ -23,6 +23,7 @@ type Franchisee = {
   telefone: number;
   video: number;
   presencial: number;
+  live: number;
 };
 const channels: [Channel, string, typeof MessageCircle][] = [
   ["WHATSAPP", "WhatsApp", MessageCircle],
@@ -128,7 +129,11 @@ export function TVListMode() {
     );
     setUndo(null);
   }
-  const visible = list.filter((item) => `${item.name} ${item.unitName}`.toLocaleLowerCase("pt-BR").includes(query.toLocaleLowerCase("pt-BR")));
+  const visible = list.filter((item) =>
+    `${item.name} ${item.unitName}`
+      .toLocaleLowerCase("pt-BR")
+      .includes(query.toLocaleLowerCase("pt-BR")),
+  );
   return (
     <main className="min-h-screen bg-[#eef7ef] p-5 lg:p-8">
       <div className="mx-auto flex h-[calc(100vh-2.5rem)] max-w-[1800px] flex-col gap-4">
@@ -169,7 +174,24 @@ export function TVListMode() {
             {list.length} unidades
           </b>
         </div>
-        <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm focus-within:border-[#0b8f45] focus-within:ring-4 focus-within:ring-[#0b8f45]/10"><Search className="h-5 w-5 text-[#0b8f45]"/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar franqueado ou unidade" className="w-full bg-transparent text-base text-[#003b71] outline-none placeholder:text-slate-400"/>{query && <button type="button" onClick={() => setQuery("")} className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-bold text-slate-600">Limpar</button>}</label>
+        <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm focus-within:border-[#0b8f45] focus-within:ring-4 focus-within:ring-[#0b8f45]/10">
+          <Search className="h-5 w-5 text-[#0b8f45]" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Buscar franqueado ou unidade"
+            className="w-full bg-transparent text-base text-[#003b71] outline-none placeholder:text-slate-400"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-bold text-slate-600"
+            >
+              Limpar
+            </button>
+          )}
+        </label>
         <section
           ref={box}
           className="min-h-0 flex-1 overflow-y-auto rounded-[28px] border border-slate-200 bg-[#f8fbf8] p-4 shadow-xl"
@@ -211,6 +233,7 @@ export function TVListMode() {
                       ["Telefone", item.telefone],
                       ["Vídeo", item.video],
                       ["Presencial", item.presencial],
+                      ["Lives", item.live],
                     ].map(([name, value]) => (
                       <span
                         key={String(name)}
@@ -247,7 +270,12 @@ export function TVListMode() {
                 </div>
                 {done === item.id && <Check className="text-[#0b8f45]" />}
               </article>
-            ))}{!visible.length && <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center text-slate-500">Nenhum franqueado encontrado.</div>}
+            ))}
+            {!visible.length && (
+              <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center text-slate-500">
+                Nenhum franqueado encontrado.
+              </div>
+            )}
           </div>
         </section>
       </div>

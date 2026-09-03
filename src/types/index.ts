@@ -1,6 +1,7 @@
 export type UserRole = "ADMIN" | "SUPPORT";
 export type FranchiseMoment = "IMPLANTACAO" | "INAUGURADA";
-export type ContactType = "WHATSAPP" | "TELEFONE" | "VIDEO_CHAMADA" | "PRESENCIAL";
+export type ContactType =
+  "WHATSAPP" | "TELEFONE" | "VIDEO_CHAMADA" | "PRESENCIAL" | "LIVE";
 
 export type User = {
   id: string;

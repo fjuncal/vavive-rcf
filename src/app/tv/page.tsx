@@ -26,6 +26,7 @@ type Franchisee = TVFranchisee & {
   telefone: number;
   video: number;
   presencial: number;
+  live: number;
   lastContact: string | null;
 };
 type TVData = {
@@ -53,6 +54,7 @@ const metrics = [
   { key: "telefone", label: "Telefone" },
   { key: "video", label: "Vídeo" },
   { key: "presencial", label: "Presencial" },
+  { key: "live", label: "Lives" },
 ] as const;
 type RecentContact = {
   id: string;
@@ -278,7 +280,9 @@ export default function TVPage() {
       <div className="mx-auto flex h-[calc(100vh-2.5rem)] max-w-[1920px] flex-col gap-5">
         <header className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white"><VaviveLogo className="h-12 w-12" /></div>
+            <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white">
+              <VaviveLogo className="h-12 w-12" />
+            </div>
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[.28em] text-[#0b8f45]">
                 Central VAVIVE
