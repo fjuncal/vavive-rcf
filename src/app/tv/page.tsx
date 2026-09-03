@@ -2,36 +2,459 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, ChevronLeft, ChevronRight, Clock3, LayoutDashboard, LogOut, Sparkles } from "lucide-react";
-import { QuickContactButtons, type ContactChannel, type TVFranchisee } from "@/components/tv/touch-contact-panel";
+import {
+  Activity,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  LayoutDashboard,
+  LogOut,
+  Sparkles,
+} from "lucide-react";
+import {
+  QuickContactButtons,
+  type ContactChannel,
+  type TVFranchisee,
+} from "@/components/tv/touch-contact-panel";
 import { FranchiseeSelector } from "@/components/tv/franchisee-selector";
 
-type Franchisee = TVFranchisee & { moment: "IMPLANTACAO" | "INAUGURADA"; whatsapp: number; telefone: number; video: number; presencial: number; lastContact: string | null };
-type TVData = { monthLabel: string; currentMonth: { qualifiedContacts: number; contactedFranchisees: number; totalFranchisees: number }; franchisees: Franchisee[] };
-const empty: TVData = { monthLabel: "", currentMonth: { qualifiedContacts: 0, contactedFranchisees: 0, totalFranchisees: 0 }, franchisees: [] };
-const photo = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=900&q=85";
-const metrics = [{ key: "whatsapp", label: "WhatsApp" }, { key: "telefone", label: "Telefone" }, { key: "video", label: "Vídeo" }, { key: "presencial", label: "Presencial" }] as const;
+type Franchisee = TVFranchisee & {
+  moment: "IMPLANTACAO" | "INAUGURADA";
+  whatsapp: number;
+  telefone: number;
+  video: number;
+  presencial: number;
+  lastContact: string | null;
+};
+type TVData = {
+  monthLabel: string;
+  currentMonth: {
+    qualifiedContacts: number;
+    contactedFranchisees: number;
+    totalFranchisees: number;
+  };
+  franchisees: Franchisee[];
+};
+const empty: TVData = {
+  monthLabel: "",
+  currentMonth: {
+    qualifiedContacts: 0,
+    contactedFranchisees: 0,
+    totalFranchisees: 0,
+  },
+  franchisees: [],
+};
+const photo =
+  "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=900&q=85";
+const metrics = [
+  { key: "whatsapp", label: "WhatsApp" },
+  { key: "telefone", label: "Telefone" },
+  { key: "video", label: "Vídeo" },
+  { key: "presencial", label: "Presencial" },
+] as const;
+type RecentContact = {
+  id: string;
+  type: "WHATSAPP" | "TELEFONE" | "VIDEO_CHAMADA" | "PRESENCIAL";
+  contactedAt: string;
+  user: { name: string };
+};
+const channelLabels: Record<RecentContact["type"], string> = {
+  WHATSAPP: "WhatsApp",
+  TELEFONE: "Telefone",
+  VIDEO_CHAMADA: "Vídeo",
+  PRESENCIAL: "Presencial",
+};
+function TVContactHistory({ franchiseeId }: { franchiseeId: string }) {
+  const [items, setItems] = useState<RecentContact[]>([]);
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/tv/franchisee/${franchiseeId}/history`, { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : []))
+      .then((data) => {
+        if (active) setItems(data);
+      })
+      .catch(() => {
+        if (active) setItems([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [franchiseeId]);
+  const latest = items[0];
+  return (
+    <section className="mt-5 rounded-2xl border border-white/15 bg-[#002f5a]/30 p-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-bold uppercase tracking-[.18em] text-[#b8ee35]">
+          Último contato
+        </p>
+        {latest && (
+          <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs font-bold">
+            {channelLabels[latest.type]}
+          </span>
+        )}
+      </div>
+      {latest ? (
+        <p className="mt-2 text-sm text-white">
+          {new Date(latest.contactedAt).toLocaleDateString("pt-BR", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+          })}{" "}
+          às{" "}
+          {new Date(latest.contactedAt).toLocaleTimeString("pt-BR", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </p>
+      ) : (
+        <p className="mt-2 text-sm text-white/65">Nenhum contato registrado.</p>
+      )}
+      <div className="mt-4 border-t border-white/10 pt-3">
+        <p className="mb-2 text-xs font-bold uppercase tracking-[.18em] text-white/55">
+          Histórico recente
+        </p>
+        <div className="space-y-2">
+          {items.slice(0, 4).map((item) => (
+            <div
+              key={item.id}
+              className="flex items-center justify-between gap-3 text-xs"
+            >
+              <span className="font-semibold text-white">
+                {channelLabels[item.type]}
+              </span>
+              <span className="text-right text-white/65">
+                {new Date(item.contactedAt).toLocaleDateString("pt-BR", {
+                  day: "2-digit",
+                  month: "2-digit",
+                })}{" "}
+                ·{" "}
+                {new Date(item.contactedAt).toLocaleTimeString("pt-BR", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
+            </div>
+          ))}
+          {!items.length && (
+            <p className="text-xs text-white/55">Sem interações anteriores.</p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
 
 export default function TVPage() {
-  const router = useRouter(); const [data, setData] = useState<TVData>(empty); const [index, setIndex] = useState(0); const [seconds, setSeconds] = useState(30); const [role, setRole] = useState<string | null>(null); const [now, setNow] = useState(new Date());
-  const refresh = useCallback(async () => { try { const response = await fetch("/api/tv", { cache: "no-store" }); if (response.status === 401) { router.replace("/tv/login"); return; } if (response.ok) setData(await response.json()); } catch {} }, [router]);
-  useEffect(() => { void refresh(); const interval = window.setInterval(refresh, 60_000); return () => window.clearInterval(interval); }, [refresh]);
-  useEffect(() => { fetch("/api/auth/me").then((response) => response.ok ? response.json() : null).then((value) => setRole(value?.user?.role ?? null)).catch(() => setRole(null)); }, []);
-  useEffect(() => { const interval = window.setInterval(() => setNow(new Date()), 1000); return () => window.clearInterval(interval); }, []);
-  useEffect(() => { const interval = window.setInterval(() => setSeconds((value) => { if (value <= 1) { setIndex((current) => (current + 1) % Math.max(1, data.franchisees.length)); return 30; } return value - 1; }), 1000); return () => window.clearInterval(interval); }, [data.franchisees.length]);
-  const active = Math.min(index, Math.max(0, data.franchisees.length - 1)); const current = data.franchisees[active]; const list = useMemo(() => data.franchisees.map(({ id, name, unitName, photoUrl }) => ({ id, name, unitName, photoUrl })), [data.franchisees]);
-  const select = (id: string) => { const target = data.franchisees.findIndex((item) => item.id === id); if (target >= 0) { setIndex(target); setSeconds(30); } };
-  const registerInstantly = useCallback((franchiseeId: string, type: ContactChannel) => {
-    setData((previous) => {
-      const target = previous.franchisees.find((item) => item.id === franchiseeId);
-      if (!target) return previous;
-      const hadQualifiedContact = target.telefone + target.video + target.presencial > 0;
-      const key = type === "VIDEO_CHAMADA" ? "video" : type === "PRESENCIAL" ? "presencial" : type === "TELEFONE" ? "telefone" : "whatsapp";
-      return { ...previous, currentMonth: { ...previous.currentMonth, qualifiedContacts: previous.currentMonth.qualifiedContacts + (type === "WHATSAPP" ? 0 : 1), contactedFranchisees: previous.currentMonth.contactedFranchisees + (type !== "WHATSAPP" && !hadQualifiedContact ? 1 : 0) }, franchisees: previous.franchisees.map((item) => item.id === franchiseeId ? { ...item, [key]: item[key] + 1, lastContact: new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) } : item) };
-    });
+  const router = useRouter();
+  const [data, setData] = useState<TVData>(empty);
+  const [index, setIndex] = useState(0);
+  const [seconds, setSeconds] = useState(30);
+  const [role, setRole] = useState<string | null>(null);
+  const [now, setNow] = useState(new Date());
+  const refresh = useCallback(async () => {
+    try {
+      const response = await fetch("/api/tv", { cache: "no-store" });
+      if (response.status === 401) {
+        router.replace("/tv/login");
+        return;
+      }
+      if (response.ok) setData(await response.json());
+    } catch {}
+  }, [router]);
+  useEffect(() => {
     void refresh();
+    const interval = window.setInterval(refresh, 60_000);
+    return () => window.clearInterval(interval);
   }, [refresh]);
-  const logout = async () => { try { await fetch("/api/auth/logout", { method: "POST", cache: "no-store" }); } finally { window.location.assign("/tv/login"); } };
-  const percent = data.currentMonth.totalFranchisees ? Math.round(data.currentMonth.contactedFranchisees / data.currentMonth.totalFranchisees * 100) : 0;
-  return <main className="min-h-screen bg-[#eef7ef] p-5 text-[#073b36] lg:p-8"><div className="mx-auto flex h-[calc(100vh-2.5rem)] max-w-[1920px] flex-col gap-5"><header className="flex items-center justify-between"><div className="flex items-center gap-3"><div className="flex h-12 w-12 items-center justify-center rounded-full border-4 border-[#b8ee35] bg-[#003b71] text-xl font-bold text-[#b8ee35]">V</div><div><p className="text-[10px] font-bold uppercase tracking-[.28em] text-[#0b8f45]">Central VAVIVE</p><h1 className="text-xl font-semibold text-[#003b71]">Acompanhamento da rede</h1></div></div><div className="flex items-center gap-3"><div className="text-right"><p className="text-xs uppercase tracking-widest text-slate-500">{data.monthLabel}</p><p className="font-semibold text-[#003b71]">{now.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</p></div>{role && role !== "TV" && <button onClick={() => router.push("/dashboard")} className="inline-flex items-center gap-2 rounded-xl bg-[#003b71] px-4 py-3 text-sm font-semibold text-white"><LayoutDashboard className="h-4 w-4" />Painel</button>}<button onClick={logout} className="rounded-xl border border-slate-200 bg-white p-3 text-slate-500"><LogOut className="h-4 w-4" /></button></div></header><div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[minmax(0,1fr)_350px]">{current ? <section className="relative min-h-0 overflow-hidden rounded-[32px] bg-gradient-to-br from-[#003b71] via-[#07547b] to-[#0b8f45] shadow-2xl"><div className="flex h-full flex-col justify-between p-8 lg:p-11"><div><div className="flex justify-between"><span className="rounded-full bg-[#b8ee35] px-4 py-2 text-xs font-bold uppercase tracking-widest text-[#003b71]">Franqueado em foco</span><span className="text-sm text-white/70">Próxima troca</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-white/20"><div className="h-full rounded-full bg-[#b8ee35] transition-[width] duration-1000" style={{ width: `${seconds / 30 * 100}%` }} /></div></div><div className="grid items-center gap-8 lg:grid-cols-[.7fr_1.3fr]"><img src={current.photoUrl || photo} alt={current.name} className="mx-auto aspect-[4/5] w-full max-w-sm rounded-[28px] object-cover shadow-2xl" /><div className="text-white"><p className="flex items-center gap-2 text-sm uppercase tracking-[.24em] text-[#b8ee35]"><Sparkles className="h-4 w-4" />{current.moment === "INAUGURADA" ? "Inaugurada" : "Em implantação"}</p><h2 className="mt-4 text-5xl font-semibold leading-none xl:text-7xl">{current.name}</h2><p className="mt-3 text-2xl text-white/70">{current.unitName}</p><div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">{metrics.map(({ key, label }) => <div key={key} className="rounded-2xl border border-white/15 bg-white/10 p-4"><p className="text-3xl font-semibold">{current[key]}</p><p className="mt-1 text-xs text-white/60">{label}</p></div>)}</div><p className="mt-5 text-sm text-white/70">Último contato: <b className="text-white">{current.lastContact || "Sem registro"}</b></p><QuickContactButtons franchisee={current} onSaved={registerInstantly} /></div></div><div className="flex items-center justify-between"><div className="flex gap-2">{data.franchisees.map((item, position) => <button key={item.id} onClick={() => select(item.id)} className={`h-2 rounded-full ${position === active ? "w-9 bg-[#b8ee35]" : "w-2 bg-white/40"}`} />)}</div><div className="flex gap-2"><button onClick={() => select(data.franchisees[(active - 1 + data.franchisees.length) % data.franchisees.length].id)} className="rounded-full border border-white/20 p-3 text-white"><ChevronLeft /></button><button onClick={() => select(data.franchisees[(active + 1) % data.franchisees.length].id)} className="rounded-full bg-[#b8ee35] p-3 text-[#003b71]"><ChevronRight /></button></div></div></div></section> : <section className="flex items-center justify-center rounded-[32px] bg-[#003b71] text-white">Nenhum franqueado ativo encontrado.</section>}<aside className="rounded-[32px] bg-white p-5 shadow-xl"><p className="text-xs font-bold uppercase tracking-[.2em] text-[#0b8f45]">Visão da rede</p><h2 className="mt-1 text-2xl font-semibold text-[#003b71]">Acompanhamento</h2><div className="mt-5 grid grid-cols-2 gap-3"><div className="rounded-2xl bg-[#eef7ef] p-4"><p className="text-3xl font-bold text-[#003b71]">{data.currentMonth.qualifiedContacts}</p><p className="text-xs text-slate-500">qualificados</p></div><div className="rounded-2xl bg-[#b8ee35]/35 p-4"><p className="text-3xl font-bold text-[#003b71]">{percent}%</p><p className="text-xs text-slate-500">rede contatada</p></div></div><FranchiseeSelector franchisees={list} selectedId={current?.id} onSelect={select} /><div className="mt-5 rounded-2xl bg-[#f8fbf8] p-4 text-sm leading-6 text-slate-600">Use a busca para encontrar qualquer unidade. Os quatro botões de comunicação ficam no cartão em destaque.</div></aside></div><footer className="flex items-center gap-2 text-xs text-slate-500"><Clock3 className="h-4 w-4 text-[#0b8f45]" />Atualização automática a cada minuto.<Activity className="ml-3 h-4 w-4 text-[#0b8f45]" />{data.franchisees.length} franqueados disponíveis.</footer></div></main>;
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((value) => setRole(value?.user?.role ?? null))
+      .catch(() => setRole(null));
+  }, []);
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(interval);
+  }, []);
+  useEffect(() => {
+    const interval = window.setInterval(
+      () =>
+        setSeconds((value) => {
+          if (value <= 1) {
+            setIndex(
+              (current) => (current + 1) % Math.max(1, data.franchisees.length),
+            );
+            return 30;
+          }
+          return value - 1;
+        }),
+      1000,
+    );
+    return () => window.clearInterval(interval);
+  }, [data.franchisees.length]);
+  const active = Math.min(index, Math.max(0, data.franchisees.length - 1));
+  const current = data.franchisees[active];
+  const list = useMemo(
+    () =>
+      data.franchisees.map(({ id, name, unitName, photoUrl }) => ({
+        id,
+        name,
+        unitName,
+        photoUrl,
+      })),
+    [data.franchisees],
+  );
+  const select = (id: string) => {
+    const target = data.franchisees.findIndex((item) => item.id === id);
+    if (target >= 0) {
+      setIndex(target);
+      setSeconds(30);
+    }
+  };
+  const registerInstantly = useCallback(
+    (franchiseeId: string, type: ContactChannel) => {
+      setData((previous) => {
+        const target = previous.franchisees.find(
+          (item) => item.id === franchiseeId,
+        );
+        if (!target) return previous;
+        const hadQualifiedContact =
+          target.telefone + target.video + target.presencial > 0;
+        const key =
+          type === "VIDEO_CHAMADA"
+            ? "video"
+            : type === "PRESENCIAL"
+              ? "presencial"
+              : type === "TELEFONE"
+                ? "telefone"
+                : "whatsapp";
+        return {
+          ...previous,
+          currentMonth: {
+            ...previous.currentMonth,
+            qualifiedContacts:
+              previous.currentMonth.qualifiedContacts +
+              (type === "WHATSAPP" ? 0 : 1),
+            contactedFranchisees:
+              previous.currentMonth.contactedFranchisees +
+              (type !== "WHATSAPP" && !hadQualifiedContact ? 1 : 0),
+          },
+          franchisees: previous.franchisees.map((item) =>
+            item.id === franchiseeId
+              ? {
+                  ...item,
+                  [key]: item[key] + 1,
+                  lastContact: new Date().toLocaleDateString("pt-BR", {
+                    day: "2-digit",
+                    month: "2-digit",
+                  }),
+                }
+              : item,
+          ),
+        };
+      });
+      void refresh();
+    },
+    [refresh],
+  );
+  const logout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST", cache: "no-store" });
+    } finally {
+      window.location.assign("/tv/login");
+    }
+  };
+  const percent = data.currentMonth.totalFranchisees
+    ? Math.round(
+        (data.currentMonth.contactedFranchisees /
+          data.currentMonth.totalFranchisees) *
+          100,
+      )
+    : 0;
+  return (
+    <main className="min-h-screen bg-[#eef7ef] p-5 text-[#073b36] lg:p-8">
+      <div className="mx-auto flex h-[calc(100vh-2.5rem)] max-w-[1920px] flex-col gap-5">
+        <header className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full border-4 border-[#b8ee35] bg-[#003b71] text-xl font-bold text-[#b8ee35]">
+              V
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[.28em] text-[#0b8f45]">
+                Central VAVIVE
+              </p>
+              <h1 className="text-xl font-semibold text-[#003b71]">
+                Acompanhamento da rede
+              </h1>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <p className="text-xs uppercase tracking-widest text-slate-500">
+                {data.monthLabel}
+              </p>
+              <p className="font-semibold text-[#003b71]">
+                {now.toLocaleString("pt-BR", {
+                  dateStyle: "short",
+                  timeStyle: "short",
+                })}
+              </p>
+            </div>
+            {role && role !== "TV" && (
+              <button
+                onClick={() => router.push("/dashboard")}
+                className="inline-flex items-center gap-2 rounded-xl bg-[#003b71] px-4 py-3 text-sm font-semibold text-white"
+              >
+                <LayoutDashboard className="h-4 w-4" />
+                Painel
+              </button>
+            )}
+            <button
+              onClick={logout}
+              className="rounded-xl border border-slate-200 bg-white p-3 text-slate-500"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
+        </header>
+        <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[minmax(0,1fr)_350px]">
+          {current ? (
+            <section className="relative min-h-0 overflow-hidden rounded-[32px] bg-gradient-to-br from-[#003b71] via-[#07547b] to-[#0b8f45] shadow-2xl">
+              <div className="flex h-full flex-col justify-between p-7 lg:p-9">
+                <div>
+                  <div className="flex justify-between">
+                    <span className="rounded-full bg-[#b8ee35] px-4 py-2 text-xs font-bold uppercase tracking-widest text-[#003b71]">
+                      Franqueado em foco
+                    </span>
+                    <span className="text-sm text-white/70">Próxima troca</span>
+                  </div>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/20">
+                    <div
+                      className="h-full rounded-full bg-[#b8ee35] transition-[width] duration-1000"
+                      style={{ width: `${(seconds / 30) * 100}%` }}
+                    />
+                  </div>
+                </div>
+                <div className="mt-8 grid items-center gap-7 lg:grid-cols-[.7fr_1.3fr]">
+                  <img
+                    src={current.photoUrl || photo}
+                    alt={current.name}
+                    className="mx-auto aspect-[4/5] w-full max-w-sm rounded-[28px] object-cover shadow-2xl"
+                  />
+                  <div className="text-white">
+                    <p className="flex items-center gap-2 text-sm uppercase tracking-[.24em] text-[#b8ee35]">
+                      <Sparkles className="h-4 w-4" />
+                      {current.moment === "INAUGURADA"
+                        ? "Inaugurada"
+                        : "Em implantação"}
+                    </p>
+                    <h2 className="mt-4 text-5xl font-semibold leading-none xl:text-7xl">
+                      {current.name}
+                    </h2>
+                    <p className="mt-3 text-2xl text-white/70">
+                      {current.unitName}
+                    </p>
+                    <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      {metrics.map(({ key, label }) => (
+                        <div
+                          key={key}
+                          className="rounded-2xl border border-white/15 bg-white/10 p-4"
+                        >
+                          <p className="text-3xl font-semibold">
+                            {current[key]}
+                          </p>
+                          <p className="mt-1 text-xs text-white/60">{label}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <QuickContactButtons
+                      franchisee={current}
+                      onSaved={registerInstantly}
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex gap-2">
+                    {data.franchisees.map((item, position) => (
+                      <button
+                        key={item.id}
+                        onClick={() => select(item.id)}
+                        className={`h-2 rounded-full ${position === active ? "w-9 bg-[#b8ee35]" : "w-2 bg-white/40"}`}
+                      />
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() =>
+                        select(
+                          data.franchisees[
+                            (active - 1 + data.franchisees.length) %
+                              data.franchisees.length
+                          ].id,
+                        )
+                      }
+                      className="rounded-full border border-white/20 p-3 text-white"
+                    >
+                      <ChevronLeft />
+                    </button>
+                    <button
+                      onClick={() =>
+                        select(
+                          data.franchisees[
+                            (active + 1) % data.franchisees.length
+                          ].id,
+                        )
+                      }
+                      className="rounded-full bg-[#b8ee35] p-3 text-[#003b71]"
+                    >
+                      <ChevronRight />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          ) : (
+            <section className="flex items-center justify-center rounded-[32px] bg-[#003b71] text-white">
+              Nenhum franqueado ativo encontrado.
+            </section>
+          )}
+          <aside className="rounded-[32px] bg-white p-5 shadow-xl">
+            <p className="text-xs font-bold uppercase tracking-[.2em] text-[#0b8f45]">
+              Visão da rede
+            </p>
+            <h2 className="mt-1 text-2xl font-semibold text-[#003b71]">
+              Acompanhamento
+            </h2>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <div className="rounded-2xl bg-[#eef7ef] p-4">
+                <p className="text-3xl font-bold text-[#003b71]">
+                  {data.currentMonth.qualifiedContacts}
+                </p>
+                <p className="text-xs text-slate-500">qualificados</p>
+              </div>
+              <div className="rounded-2xl bg-[#b8ee35]/35 p-4">
+                <p className="text-3xl font-bold text-[#003b71]">{percent}%</p>
+                <p className="text-xs text-slate-500">rede contatada</p>
+              </div>
+            </div>
+            <FranchiseeSelector
+              franchisees={list}
+              selectedId={current?.id}
+              onSelect={select}
+            />
+            <div className="mt-5 rounded-2xl bg-[#f8fbf8] p-4 text-sm leading-6 text-slate-600">
+              Use a busca para encontrar qualquer unidade. Os quatro botões de
+              comunicação ficam no cartão em destaque.
+            </div>
+          </aside>
+        </div>
+        <footer className="flex items-center gap-2 text-xs text-slate-500">
+          <Clock3 className="h-4 w-4 text-[#0b8f45]" />
+          Atualização automática a cada minuto.
+          <Activity className="ml-3 h-4 w-4 text-[#0b8f45]" />
+          {data.franchisees.length} franqueados disponíveis.
+        </footer>
+      </div>
+    </main>
+  );
 }
