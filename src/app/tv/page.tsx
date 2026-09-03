@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Activity, ChevronLeft, ChevronRight, Clock3, LayoutDashboard, LogOut, Sparkles } from "lucide-react";

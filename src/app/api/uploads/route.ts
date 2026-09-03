@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
-import crypto from "node:crypto";
-import { requireRole } from "@/services/auth";
+import { OPERATIONS_ROLES, requireAnyRole } from "@/services/auth";
+import { storeFranchiseePhoto } from "@/lib/storage";
 export const runtime = "nodejs";
-export async function POST(request: Request) { await requireRole("ADMIN"); const form = await request.formData(); const file = form.get("file"); if (!(file instanceof File)) return NextResponse.json({ message: "Arquivo inválido." }, { status: 400 }); if (!file.type.startsWith("image/") || file.size > 5 * 1024 * 1024) return NextResponse.json({ message: "Envie uma imagem de até 5 MB." }, { status: 400 }); const extension = file.type.split("/")[1]?.replace("jpeg", "jpg") || "jpg"; const name = `${crypto.randomUUID()}.${extension}`; const folder = path.join(process.cwd(), "public", "uploads"); await mkdir(folder, { recursive: true }); await writeFile(path.join(folder, name), Buffer.from(await file.arrayBuffer())); return NextResponse.json({ url: `/uploads/${name}` }, { status: 201 }); }
+const allowedTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+export async function POST(request: Request) { await requireAnyRole(OPERATIONS_ROLES); try { const file = (await request.formData()).get("file"); if (!(file instanceof File)) return NextResponse.json({ message: "Arquivo inválido." }, { status: 400 }); if (!allowedTypes.has(file.type) || file.size > 5 * 1024 * 1024) return NextResponse.json({ message: "Envie JPG, PNG ou WebP de até 5 MB." }, { status: 400 }); return NextResponse.json({ url: await storeFranchiseePhoto(file) }, { status: 201 }); } catch (error) { return NextResponse.json({ message: error instanceof Error ? error.message : "Não foi possível enviar a foto." }, { status: 500 }); } }

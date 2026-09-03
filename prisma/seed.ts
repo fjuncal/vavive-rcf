@@ -25,11 +25,10 @@ const franchisees: Array<{
 const contactTypes = ["WHATSAPP", "TELEFONE", "VIDEO_CHAMADA", "PRESENCIAL"] as const;
 
 async function main() {
-  const adminEmail = process.env.ADMIN_SEED_EMAIL ?? "admin@vavive.local";
+  const adminEmail = process.env.ADMIN_SEED_EMAIL;
   const adminPlainPassword = process.env.ADMIN_SEED_PASSWORD;
-  if (!adminPlainPassword) {
-    throw new Error("ADMIN_SEED_PASSWORD deve ser definido para executar o seed.");
-  }
+  const tvPlainPassword = process.env.TV_SEED_PASSWORD;
+  if (!adminEmail || !adminPlainPassword || !tvPlainPassword) throw new Error("ADMIN_SEED_EMAIL, ADMIN_SEED_PASSWORD e TV_SEED_PASSWORD devem ser definidos para executar o seed.");
   const adminPassword = await bcrypt.hash(adminPlainPassword, 10);
 
   await prisma.contact.deleteMany();
@@ -45,7 +44,7 @@ async function main() {
       active: true,
     },
   });
-  await prisma.user.create({ data: { name: "TV Operação", email: "tv@vavive.local", passwordHash: await bcrypt.hash(process.env.TV_SEED_PASSWORD ?? "VaviveTV@2026", 10), role: "TV", active: true } });
+  await prisma.user.create({ data: { name: "TV Suporte", email: "tv@vavive.local", passwordHash: await bcrypt.hash(tvPlainPassword, 10), role: "TV", active: true } });
 
   const createdFranchisees = await Promise.all(
     franchisees.map((franchisee) =>
@@ -93,7 +92,7 @@ async function main() {
 
   console.log("Seed executado com sucesso.");
   console.log("Superadmin seed:", { email: adminEmail });
-  console.log("TV seed: tv@vavive.local /", process.env.TV_SEED_PASSWORD ?? "VaviveTV@2026");
+  console.log("TV seed criado para tv@vavive.local.");
 }
 
 main()

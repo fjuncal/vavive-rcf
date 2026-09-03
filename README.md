@@ -1,112 +1,45 @@
 # VAVIVÊ Televisão
 
-Sistema interno de acompanhamento de franqueados da VAVIVÊ, com área administrativa para registro de contatos e uma tela de TV para monitoramento em tempo real.
+Sistema interno de franqueados com painel administrativo e TV touch para registro rápido de contatos.
 
-## Stack
-
-- Next.js 16 (App Router)
-- TypeScript
-- Tailwind CSS
-- PostgreSQL
-- Prisma ORM
-- Zod
-- React Server Components
-- Server Actions e API Routes internas
-- Recharts
-- Lucide React
-
-## Requisitos
-
-- Node.js 20+
-- PostgreSQL 15+
-- npm
-
-## Variáveis de ambiente
-
-Crie um arquivo `.env` na raiz com o conteúdo abaixo:
+## Início local
 
 ```bash
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/vavive_televisao?schema=public"
-NEXT_PUBLIC_APP_URL="http://localhost:3000"
-ADMIN_SEED_EMAIL="admin@vavive.local"
-ADMIN_SEED_PASSWORD="Vavive@2026"
-```
-
-## Banco de dados
-
-Suba apenas o PostgreSQL de desenvolvimento com Docker:
-
-```bash
+cp .env.example .env
 docker compose up -d postgres
-```
-
-Para parar o banco (os dados permanecem no volume):
-
-```bash
-docker compose stop postgres
-```
-
-1. Crie o banco PostgreSQL:
-
-```bash
-createdb vavive_televisao
-```
-
-2. Gera schema Prisma:
-
-```bash
 npx prisma generate
-npx prisma migrate dev --name init
-```
-
-3. Execute seed local:
-
-```bash
+npx prisma migrate dev
 npm run db:seed
-```
-
-## Credenciais de desenvolvimento
-
-- E-mail: admin@vavive.local
-- Senha: Vavive@2026
-
-## Como iniciar
-
-```bash
-npm install
 npm run dev
 ```
 
-A aplicação estará disponível em: http://localhost:3000
+O seed exige `ADMIN_SEED_EMAIL`, `ADMIN_SEED_PASSWORD` e `TV_SEED_PASSWORD`; ele cria o superadmin informado e a conta operacional `tv@vavive.local`. Senhas não ficam no código-fonte.
 
-## Rotas principais
+## Ambiente
 
-- `/login` — autenticação interna
-- `/dashboard` — painel de indicadores
-- `/franqueados` — listagem e busca
-- `/franqueados/[id]` — detalhe do franqueado e histórico
-- `/franqueados/[id]/contato` — registrar novo contato
-- `/tv` — tela de monitoramento para TV
+```env
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/vavive_televisao?schema=public"
+ADMIN_SEED_EMAIL="admin@vavive.local"
+ADMIN_SEED_PASSWORD="change-me"
+TV_SEED_PASSWORD="change-me"
+```
 
-## Arquitetura
+## Autenticação e permissões
 
-- `src/app` — rotas e páginas do app
-- `src/components` — layout, UI e blocos reutilizáveis
-- `src/domain` — validações e regras de input
-- `src/lib` — constantes, utilitários e conexão com banco
-- `src/services` — regras de negócio e consultas
-- `src/types` — tipos de domínio
-- `prisma` — schema e seed
+Sessões ficam no PostgreSQL e usam cookie HttpOnly, SameSite=Lax e Secure em produção. Sessões administrativas duram 8 horas; a TV, 180 dias. `SUPERADMIN` administra usuários; `ADMIN` e `SUPPORT` administram franqueados e contatos; `TV` acessa somente a experiência `/tv` e registra contatos.
 
-## Banco (modelo inicial)
+A TV é interativa: seleciona franqueados, mostra indicadores e grava WhatsApp, Telefone, Videochamada ou Presencial. O autor é sempre o usuário autenticado da sessão, portanto a auditoria mostra `TV Suporte` quando o registro veio da TV. Contatos qualificados: Telefone, Videochamada e Presencial.
 
-- `User`: perfil interno do suporte
-- `Franchisee`: unidade/franqueado
-- `Contact`: histórico de contatos com tipo, data e observações
+## Fotos e deploy
 
-## Observações
+Em desenvolvimento, as fotos são gravadas em `public/uploads`. Isso não é persistente na Vercel; em produção o upload é bloqueado até que `src/lib/storage.ts` seja conectado a um storage persistente, como Vercel Blob. Apenas a URL deve ser salva no PostgreSQL. Use PostgreSQL gerenciado em produção.
 
-- A tela `/tv` é somente leitura e não exige login administrativo.
-- Contatos de WhatsApp ficam no histórico, mas não entram no indicador principal da TV.
-- O cálculo mensal usa `contactedAt`, respeitando o intervalo do mês atual vs. anterior.
-- O projeto foi estruturado para permitir futura segmentação de permissões e metas por franqueado.
+## Validação
+
+```bash
+npm run lint
+npm run typecheck
+npx prisma validate
+npx prisma generate
+npm run build
+```

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireRole } from "@/services/auth";
+import { OPERATIONS_ROLES, requireAnyRole } from "@/services/auth";
 import { prisma } from "@/lib/db";
 
 const schema = z.object({
@@ -12,7 +12,7 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
-  await requireRole("SUPPORT");
+  await requireAnyRole(OPERATIONS_ROLES);
 
   try {
     const payload = schema.parse(await request.json());
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  await requireRole("SUPPORT");
+  await requireAnyRole(OPERATIONS_ROLES);
   try {
     const body = await request.json();
     const id = String(body.id || "");
