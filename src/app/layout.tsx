@@ -15,7 +15,13 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "VAVIVÊ | Acompanhamento de Franqueados",
-  description: "Sistema interno de acompanhamento do time de suporte da VAVIVÊ.",
+  description:
+    "Sistema interno de acompanhamento do time de suporte da VAVIVÊ.",
+  icons: {
+    icon: "/icon.png",
+    shortcut: "/icon.png",
+    apple: "/icon.png",
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

@@ -1,3 +1,75 @@
 "use client";
 import { useState } from "react";
-export default function TVLogin(){const [email,setEmail]=useState("");const [password,setPassword]=useState("");const [error,setError]=useState("");const [saving,setSaving]=useState(false);async function submit(event:React.FormEvent){event.preventDefault();setSaving(true);setError("");try{const response=await fetch("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,password})});const data=await response.json().catch(()=>({}));if(!response.ok){setError(data.message||"Usuário ou senha inválidos.");return}window.location.assign("/tv")}catch{setError("Não foi possível entrar. Tente novamente.")}finally{setSaving(false)}}return <main className="flex min-h-screen items-center justify-center bg-[#003b71] p-6"><form onSubmit={submit} className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl"><div className="mb-8 flex h-16 w-16 items-center justify-center rounded-full border-4 border-[#b8ee35] bg-[#003b71] text-3xl font-bold text-[#b8ee35]">V</div><p className="text-xs font-bold uppercase tracking-[.25em] text-[#0b8f45]">Acesso operacional</p><h1 className="mt-2 text-3xl font-semibold text-[#003b71]">Entrar na TV</h1><p className="mt-2 text-sm text-slate-500">Use o acesso operacional cadastrado para operar o painel touch.</p><div className="mt-8 space-y-4"><input required className="w-full rounded-xl border p-3" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="E-mail"/><input required className="w-full rounded-xl border p-3" type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Senha"/>{error&&<p className="text-sm text-red-600">{error}</p>}<button disabled={saving} className="w-full rounded-xl bg-[#0b8f45] p-3 font-semibold text-white disabled:opacity-60">{saving?"Entrando...":"Entrar"}</button></div></form></main>}
+import { VaviveLogo } from "@/components/brand/vavive-logo";
+export default function TVLogin() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(data.message || "Usuário ou senha inválidos.");
+        return;
+      }
+      window.location.assign("/tv/modo");
+    } catch {
+      setError("Não foi possível entrar. Tente novamente.");
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[#003b71] p-6">
+      <form
+        onSubmit={submit}
+        className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl"
+      >
+        <div className="mb-8 flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-white"><VaviveLogo className="h-16 w-16" /></div>
+        <p className="text-xs font-bold uppercase tracking-[.25em] text-[#0b8f45]">
+          Acesso operacional
+        </p>
+        <h1 className="mt-2 text-3xl font-semibold text-[#003b71]">
+          Entrar na TV
+        </h1>
+        <p className="mt-2 text-sm text-slate-500">
+          Use o acesso operacional cadastrado para operar o painel touch.
+        </p>
+        <div className="mt-8 space-y-4">
+          <input
+            required
+            className="w-full rounded-xl border p-3"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="E-mail"
+          />
+          <input
+            required
+            className="w-full rounded-xl border p-3"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Senha"
+          />
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <button
+            disabled={saving}
+            className="w-full rounded-xl bg-[#0b8f45] p-3 font-semibold text-white disabled:opacity-60"
+          >
+            {saving ? "Entrando..." : "Entrar"}
+          </button>
+        </div>
+      </form>
+    </main>
+  );
+}

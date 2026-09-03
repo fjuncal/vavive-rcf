@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Clock3,
   LayoutDashboard,
+  LayoutGrid,
   LogOut,
   Sparkles,
 } from "lucide-react";
@@ -17,6 +18,7 @@ import {
   type TVFranchisee,
 } from "@/components/tv/touch-contact-panel";
 import { FranchiseeSelector } from "@/components/tv/franchisee-selector";
+import { VaviveLogo } from "@/components/brand/vavive-logo";
 
 type Franchisee = TVFranchisee & {
   moment: "IMPLANTACAO" | "INAUGURADA";
@@ -276,9 +278,7 @@ export default function TVPage() {
       <div className="mx-auto flex h-[calc(100vh-2.5rem)] max-w-[1920px] flex-col gap-5">
         <header className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full border-4 border-[#b8ee35] bg-[#003b71] text-xl font-bold text-[#b8ee35]">
-              V
-            </div>
+            <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white"><VaviveLogo className="h-12 w-12" /></div>
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[.28em] text-[#0b8f45]">
                 Central VAVIVE
@@ -309,6 +309,13 @@ export default function TVPage() {
                 Painel
               </button>
             )}
+            <button
+              onClick={() => router.push("/tv/modo")}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-[#003b71]"
+            >
+              <LayoutGrid className="h-4 w-4" />
+              Modos
+            </button>
             <button
               onClick={logout}
               className="rounded-xl border border-slate-200 bg-white p-3 text-slate-500"
@@ -370,6 +377,7 @@ export default function TVPage() {
                     <QuickContactButtons
                       franchisee={current}
                       onSaved={registerInstantly}
+                      onUndone={() => void refresh()}
                     />
                   </div>
                 </div>

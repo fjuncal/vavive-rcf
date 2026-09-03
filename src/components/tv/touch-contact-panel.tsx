@@ -41,13 +41,16 @@ const time = (value: string) =>
 export function QuickContactButtons({
   franchisee,
   onSaved,
+  onUndone,
 }: {
   franchisee: TVFranchisee;
   onSaved: (id: string, type: ContactChannel) => void;
+  onUndone?: () => void;
 }) {
   const [saved, setSaved] = useState<ContactChannel | null>(null);
   const [saving, setSaving] = useState<ContactChannel | null>(null);
   const [history, setHistory] = useState<Recent[]>([]);
+  const [undo, setUndo] = useState<Recent | null>(null);
   useEffect(() => {
     let live = true;
     fetch(`/api/tv/franchisee/${franchisee.id}/history`, { cache: "no-store" })
@@ -89,11 +92,30 @@ export function QuickContactButtons({
         ].slice(0, 5),
       );
       onSaved(franchisee.id, type);
+      setUndo({
+        id: item.id,
+        type: item.type,
+        contactedAt: item.contactedAt,
+        user: item.user,
+      });
+      window.setTimeout(() => setUndo(null), 15_000);
       setSaved(type);
       window.setTimeout(() => setSaved(null), 1800);
     } finally {
       setSaving(null);
     }
+  }
+  async function undoLast() {
+    if (!undo) return;
+    const response = await fetch("/api/contacts", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: undo.id }),
+    });
+    if (!response.ok) return;
+    setHistory((items) => items.filter((item) => item.id !== undo.id));
+    setUndo(null);
+    onUndone?.();
   }
   const latest = history[0];
   return (
@@ -114,6 +136,17 @@ export function QuickContactButtons({
           </button>
         ))}
       </div>
+      {undo && (
+        <div className="fixed bottom-6 left-1/2 z-50 flex w-[min(92vw,580px)] -translate-x-1/2 items-center justify-between gap-5 rounded-2xl border border-[#b8ee35]/50 bg-[#003b71] px-5 py-4 text-white shadow-2xl">
+          <span><b className="block text-base">Contato registrado</b><small className="text-white/70">Toque em desfazer se foi engano. Disponível por 15 segundos.</small></span>
+          <button
+            onClick={undoLast}
+            className="rounded-xl bg-[#b8ee35] px-5 py-3 font-bold text-[#003b71]"
+          >
+            Desfazer
+          </button>
+        </div>
+      )}
       <section className="mt-3 rounded-2xl border border-white/15 bg-[#002f5a]/30 p-3.5">
         <div className="flex items-center justify-between">
           <p className="text-xs font-bold uppercase tracking-[.18em] text-[#b8ee35]">
