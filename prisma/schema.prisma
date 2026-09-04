@@ -93,8 +93,9 @@ model LiveParticipant {
   liveId       String
   franchisee   Franchisee @relation(fields: [franchiseeId], references: [id])
   franchiseeId String
-  contact      Contact    @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  contactId    String     @unique
+  attended     Boolean    @default(true)
+  contact      Contact?   @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  contactId    String?    @unique
   createdAt    DateTime   @default(now())
 
   @@unique([liveId, franchiseeId])

@@ -7,6 +7,7 @@ import {
   Check,
   LoaderCircle,
   Search,
+  UserCheck,
   Users,
   X,
 } from "lucide-react";
@@ -31,7 +32,8 @@ export type LiveFormValue = {
   title: string;
   scheduledAt: string;
   hostUserId: string;
-  participantIds: string[];
+  guestIds: string[];
+  attendeeIds: string[];
   notes: string;
 };
 
@@ -65,8 +67,9 @@ export function LiveFormModal({
     initial?.hostUserId ?? hosts[0]?.id ?? "",
   );
   const [notes, setNotes] = useState(initial?.notes ?? "");
-  const [selected, setSelected] = useState(
-    () => new Set(initial?.participantIds ?? []),
+  const [guests, setGuests] = useState(() => new Set(initial?.guestIds ?? []));
+  const [attendees, setAttendees] = useState(
+    () => new Set(initial?.attendeeIds ?? []),
   );
   const [query, setQuery] = useState("");
   const [saving, setSaving] = useState(false);
@@ -85,19 +88,37 @@ export function LiveFormModal({
   const input =
     "mt-2 w-full rounded-xl border border-[var(--border)] bg-white px-3.5 py-3 text-sm text-[var(--text-primary)] outline-none transition focus:border-[var(--brand-primary)] focus:ring-4 focus:ring-[var(--brand-primary)]/10";
 
-  function toggle(id: string) {
-    setSelected((current) => {
+  function toggleGuest(id: string) {
+    const wasGuest = guests.has(id);
+    setGuests((current) => {
       const next = new Set(current);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
+    if (wasGuest) {
+      setAttendees((current) => {
+        const next = new Set(current);
+        next.delete(id);
+        return next;
+      });
+    }
   }
 
-  function selectAll() {
-    setSelected(
+  function inviteVisible() {
+    setGuests(
       (current) => new Set([...current, ...visible.map((item) => item.id)]),
     );
+  }
+
+  function toggleAttendance(id: string) {
+    setGuests((current) => new Set(current).add(id));
+    setAttendees((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   async function submit(event: React.FormEvent) {
@@ -114,7 +135,8 @@ export function LiveFormModal({
             title,
             scheduledAt: new Date(`${date}T${time}:00`).toISOString(),
             hostUserId,
-            participantIds: [...selected],
+            guestIds: [...guests],
+            attendeeIds: [...attendees],
             notes,
           }),
         },
@@ -246,11 +268,12 @@ export function LiveFormModal({
               <div className="flex items-start justify-between gap-4">
                 <SectionTitle
                   number="02"
-                  title="Participantes"
-                  description="Selecione os franqueados que participaram."
+                  title="Convidados e presença"
+                  description="Convide os franqueados e marque quem compareceu."
                 />
                 <span className="shrink-0 rounded-full bg-[var(--background)] px-3 py-1.5 text-xs font-bold text-[var(--brand-primary)]">
-                  {selected.size} selecionado{selected.size === 1 ? "" : "s"}
+                  {guests.size} convidado{guests.size === 1 ? "" : "s"} ·{" "}
+                  {attendees.size} presente{attendees.size === 1 ? "" : "s"}
                 </span>
               </div>
               <label className="mt-5 flex h-11 items-center gap-3 rounded-xl border border-[var(--border)] bg-white px-4 transition focus-within:border-[var(--brand-primary)] focus-within:ring-4 focus-within:ring-[var(--brand-primary)]/10">
@@ -265,18 +288,21 @@ export function LiveFormModal({
               <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
                 <button
                   type="button"
-                  onClick={selectAll}
+                  onClick={inviteVisible}
                   className="text-xs font-bold text-[var(--brand-primary)] hover:underline"
                 >
-                  Selecionar resultados ({visible.length})
+                  Convidar resultados ({visible.length})
                 </button>
                 <span className="h-3 w-px bg-[var(--border)]" />
                 <button
                   type="button"
-                  onClick={() => setSelected(new Set())}
+                  onClick={() => {
+                    setGuests(new Set());
+                    setAttendees(new Set());
+                  }}
                   className="text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--brand-primary)]"
                 >
-                  Limpar seleção
+                  Limpar convidados
                 </button>
               </div>
             </div>
@@ -284,50 +310,55 @@ export function LiveFormModal({
             <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
               <div className="space-y-2">
                 {visible.map((item) => {
-                  const checked = selected.has(item.id);
+                  const invited = guests.has(item.id);
+                  const attended = attendees.has(item.id);
                   return (
-                    <button
-                      type="button"
+                    <div
                       key={item.id}
-                      aria-pressed={checked}
-                      onClick={() => toggle(item.id)}
-                      className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] ${
-                        checked
+                      className={`flex w-full items-center gap-3 rounded-xl border p-3 transition ${
+                        invited
                           ? "border-[var(--brand-primary)] bg-white shadow-sm"
                           : "border-transparent bg-white/70 hover:border-[var(--border)] hover:bg-white"
                       }`}
                     >
-                      <span
-                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
-                          checked
-                            ? "border-[var(--brand-primary)] bg-[var(--brand-primary)] text-white"
-                            : "border-slate-300 bg-white"
-                        }`}
+                      <button
+                        type="button"
+                        aria-pressed={invited}
+                        onClick={() => toggleGuest(item.id)}
+                        className="flex min-w-0 flex-1 items-center gap-3 text-left focus-visible:outline-none"
                       >
-                        {checked ? <Check className="h-3.5 w-3.5" /> : null}
-                      </span>
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--background)] text-xs font-bold text-[var(--brand-primary)]">
-                        {item.photoUrl ? (
-                          <Image
-                            src={item.photoUrl}
-                            alt=""
-                            width={40}
-                            height={40}
-                            unoptimized
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          item.name.slice(0, 2).toUpperCase()
-                        )}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <b className="block truncate text-sm text-[var(--brand-secondary)]">
-                          {item.name}
-                        </b>
-                        <small className="mt-0.5 block truncate text-[var(--text-secondary)]">
-                          {item.unitName}
-                        </small>
-                      </span>
+                        <span
+                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
+                            invited
+                              ? "border-[var(--brand-primary)] bg-[var(--brand-primary)] text-white"
+                              : "border-slate-300 bg-white"
+                          }`}
+                        >
+                          {invited ? <Check className="h-3.5 w-3.5" /> : null}
+                        </span>
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--background)] text-xs font-bold text-[var(--brand-primary)]">
+                          {item.photoUrl ? (
+                            <Image
+                              src={item.photoUrl}
+                              alt=""
+                              width={40}
+                              height={40}
+                              unoptimized
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            item.name.slice(0, 2).toUpperCase()
+                          )}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <b className="block truncate text-sm text-[var(--brand-secondary)]">
+                            {item.name}
+                          </b>
+                          <small className="mt-0.5 block truncate text-[var(--text-secondary)]">
+                            {item.unitName}
+                          </small>
+                        </span>
+                      </button>
                       {item.moment ? (
                         <span className="hidden rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 sm:inline-flex">
                           {item.moment === "INAUGURADA"
@@ -335,7 +366,20 @@ export function LiveFormModal({
                             : "Em implantação"}
                         </span>
                       ) : null}
-                    </button>
+                      <button
+                        type="button"
+                        aria-pressed={attended}
+                        onClick={() => toggleAttendance(item.id)}
+                        className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs font-bold transition ${
+                          attended
+                            ? "bg-[var(--brand-primary)] text-white"
+                            : "bg-slate-100 text-slate-500 hover:bg-[var(--background)]"
+                        }`}
+                      >
+                        <UserCheck className="h-3.5 w-3.5" />
+                        {attended ? "Presente" : "Marcar presença"}
+                      </button>
+                    </div>
                   );
                 })}
                 {!visible.length ? (

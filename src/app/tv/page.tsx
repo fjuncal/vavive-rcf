@@ -19,6 +19,10 @@ import {
 } from "@/components/tv/touch-contact-panel";
 import { FranchiseeSelector } from "@/components/tv/franchisee-selector";
 import { VaviveLogo } from "@/components/brand/vavive-logo";
+import {
+  CONTACT_ATTENTION_CONFIG,
+  type ContactAttention,
+} from "@/lib/contact-attention";
 
 type Franchisee = TVFranchisee & {
   moment: "IMPLANTACAO" | "INAUGURADA";
@@ -27,10 +31,21 @@ type Franchisee = TVFranchisee & {
   video: number;
   presencial: number;
   live: number;
+  livesInvited: number;
+  livesAttended: number;
+  liveAttendanceRate: number;
   lastContact: string | null;
+  daysWithoutContact: number | null;
+  attention: ContactAttention;
 };
+type TVPeriod =
+  | "last_7_days"
+  | "last_30_days"
+  | "last_90_days"
+  | "current_month"
+  | "previous_month";
 type TVData = {
-  monthLabel: string;
+  periodLabel: string;
   currentMonth: {
     qualifiedContacts: number;
     contactedFranchisees: number;
@@ -39,7 +54,7 @@ type TVData = {
   franchisees: Franchisee[];
 };
 const empty: TVData = {
-  monthLabel: "",
+  periodLabel: "",
   currentMonth: {
     qualifiedContacts: 0,
     contactedFranchisees: 0,
@@ -54,11 +69,18 @@ const metrics = [
   { key: "telefone", label: "Telefone" },
   { key: "video", label: "Vídeo" },
   { key: "presencial", label: "Presencial" },
-  { key: "live", label: "Lives" },
+  { key: "live", label: "Contatos Live" },
 ] as const;
+const carouselSurfaceByAttention: Record<ContactAttention, string> = {
+  em_dia: "bg-gradient-to-br from-[#003b71] via-[#07547b] to-[#0b8f45]",
+  atencao: "bg-gradient-to-br from-[#073b5b] via-[#8a5600] to-[#c68100]",
+  critico: "bg-gradient-to-br from-[#48152a] via-[#9f1e31] to-[#dc3f32]",
+  urgente:
+    "bg-gradient-to-br from-[#3d0a1e] via-[#8f102f] to-[#e23b38] animate-pulse",
+};
 type RecentContact = {
   id: string;
-  type: "WHATSAPP" | "TELEFONE" | "VIDEO_CHAMADA" | "PRESENCIAL";
+  type: "WHATSAPP" | "TELEFONE" | "VIDEO_CHAMADA" | "PRESENCIAL" | "LIVE";
   contactedAt: string;
   user: { name: string };
 };
@@ -67,6 +89,7 @@ const channelLabels: Record<RecentContact["type"], string> = {
   TELEFONE: "Telefone",
   VIDEO_CHAMADA: "Vídeo",
   PRESENCIAL: "Presencial",
+  LIVE: "Live",
 };
 function TVContactHistory({ franchiseeId }: { franchiseeId: string }) {
   const [items, setItems] = useState<RecentContact[]>([]);
@@ -151,20 +174,28 @@ function TVContactHistory({ franchiseeId }: { franchiseeId: string }) {
 export default function TVPage() {
   const router = useRouter();
   const [data, setData] = useState<TVData>(empty);
+  const [period, setPeriod] = useState<TVPeriod>("last_30_days");
   const [index, setIndex] = useState(0);
-  const [seconds, setSeconds] = useState(30);
+  const [seconds, setSeconds] = useState(12);
   const [role, setRole] = useState<string | null>(null);
   const [now, setNow] = useState(new Date());
+  const active = Math.min(index, Math.max(0, data.franchisees.length - 1));
+  const current = data.franchisees[active];
+  const currentAttention = current
+    ? CONTACT_ATTENTION_CONFIG[current.attention]
+    : CONTACT_ATTENTION_CONFIG.em_dia;
   const refresh = useCallback(async () => {
     try {
-      const response = await fetch("/api/tv", { cache: "no-store" });
+      const response = await fetch("/api/tv?period=" + period, {
+        cache: "no-store",
+      });
       if (response.status === 401) {
         router.replace("/tv/login");
         return;
       }
       if (response.ok) setData(await response.json());
     } catch {}
-  }, [router]);
+  }, [period, router]);
   useEffect(() => {
     void refresh();
     const interval = window.setInterval(refresh, 60_000);
@@ -181,6 +212,9 @@ export default function TVPage() {
     return () => window.clearInterval(interval);
   }, []);
   useEffect(() => {
+    setSeconds(currentAttention.carouselSeconds);
+  }, [current?.id, currentAttention.carouselSeconds]);
+  useEffect(() => {
     const interval = window.setInterval(
       () =>
         setSeconds((value) => {
@@ -188,16 +222,14 @@ export default function TVPage() {
             setIndex(
               (current) => (current + 1) % Math.max(1, data.franchisees.length),
             );
-            return 30;
+            return currentAttention.carouselSeconds;
           }
           return value - 1;
         }),
       1000,
     );
     return () => window.clearInterval(interval);
-  }, [data.franchisees.length]);
-  const active = Math.min(index, Math.max(0, data.franchisees.length - 1));
-  const current = data.franchisees[active];
+  }, [currentAttention.carouselSeconds, data.franchisees.length]);
   const list = useMemo(
     () =>
       data.franchisees.map(({ id, name, unitName, photoUrl }) => ({
@@ -212,7 +244,10 @@ export default function TVPage() {
     const target = data.franchisees.findIndex((item) => item.id === id);
     if (target >= 0) {
       setIndex(target);
-      setSeconds(30);
+      setSeconds(
+        CONTACT_ATTENTION_CONFIG[data.franchisees[target].attention]
+          .carouselSeconds,
+      );
     }
   };
   const registerInstantly = useCallback(
@@ -224,6 +259,12 @@ export default function TVPage() {
         if (!target) return previous;
         const hadQualifiedContact =
           target.telefone + target.video + target.presencial > 0;
+        const isQualified = [
+          "TELEFONE",
+          "VIDEO_CHAMADA",
+          "PRESENCIAL",
+          "LIVE",
+        ].includes(type);
         const key =
           type === "VIDEO_CHAMADA"
             ? "video"
@@ -231,17 +272,18 @@ export default function TVPage() {
               ? "presencial"
               : type === "TELEFONE"
                 ? "telefone"
-                : "whatsapp";
+                : type === "LIVE"
+                  ? "live"
+                  : "whatsapp";
         return {
           ...previous,
           currentMonth: {
             ...previous.currentMonth,
             qualifiedContacts:
-              previous.currentMonth.qualifiedContacts +
-              (type === "WHATSAPP" ? 0 : 1),
+              previous.currentMonth.qualifiedContacts + (isQualified ? 1 : 0),
             contactedFranchisees:
               previous.currentMonth.contactedFranchisees +
-              (type !== "WHATSAPP" && !hadQualifiedContact ? 1 : 0),
+              (isQualified && !hadQualifiedContact ? 1 : 0),
           },
           franchisees: previous.franchisees.map((item) =>
             item.id === franchiseeId
@@ -295,7 +337,7 @@ export default function TVPage() {
           <div className="flex items-center gap-3">
             <div className="text-right">
               <p className="text-xs uppercase tracking-widest text-slate-500">
-                {data.monthLabel}
+                {data.periodLabel}
               </p>
               <p className="font-semibold text-[#003b71]">
                 {now.toLocaleString("pt-BR", {
@@ -304,6 +346,18 @@ export default function TVPage() {
                 })}
               </p>
             </div>
+            <select
+              value={period}
+              onChange={(event) => setPeriod(event.target.value as TVPeriod)}
+              aria-label="Período exibido na TV"
+              className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-[#003b71] outline-none"
+            >
+              <option value="last_7_days">Últimos 7 dias</option>
+              <option value="last_30_days">Últimos 30 dias</option>
+              <option value="last_90_days">Últimos 90 dias</option>
+              <option value="current_month">Mês atual</option>
+              <option value="previous_month">Mês anterior</option>
+            </select>
             {role && role !== "TV" && (
               <button
                 onClick={() => router.push("/dashboard")}
@@ -330,42 +384,75 @@ export default function TVPage() {
         </header>
         <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[minmax(0,1fr)_350px]">
           {current ? (
-            <section className="relative min-h-0 overflow-hidden rounded-[32px] bg-gradient-to-br from-[#003b71] via-[#07547b] to-[#0b8f45] shadow-2xl">
-              <div className="flex h-full flex-col justify-between p-7 lg:p-9">
+            <section
+              className={`relative min-h-0 overflow-hidden rounded-[32px] shadow-2xl ${carouselSurfaceByAttention[current.attention]} ${currentAttention.carouselClass}`}
+            >
+              {current.attention === "urgente" && (
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-2 bg-[#facc15] shadow-[0_0_24px_rgba(250,204,21,0.95)]" />
+              )}
+              <div className="flex h-full flex-col p-5 lg:p-6">
                 <div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between gap-4">
                     <span className="rounded-full bg-[#b8ee35] px-4 py-2 text-xs font-bold uppercase tracking-widest text-[#003b71]">
                       Franqueado em foco
                     </span>
-                    <span className="text-sm text-white/70">Próxima troca</span>
+                    <span
+                      className={`rounded-full px-4 py-2 text-sm font-bold ${currentAttention.tagClass} ${current.attention === "atencao" ? "uppercase tracking-wide" : ""} ${current.attention === "critico" ? "px-5 py-2.5 uppercase tracking-wide" : ""} ${current.attention === "urgente" ? "animate-pulse px-6 py-3 text-base uppercase tracking-[.14em]" : ""}`}
+                    >
+                      {currentAttention.emoji} {currentAttention.label}
+                    </span>
                   </div>
+                  <p className="mt-3 text-right text-sm text-white/70">
+                    Próxima troca em {seconds}s
+                  </p>
                   <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/20">
                     <div
                       className="h-full rounded-full bg-[#b8ee35] transition-[width] duration-1000"
-                      style={{ width: `${(seconds / 30) * 100}%` }}
+                      style={{
+                        width: `${(seconds / currentAttention.carouselSeconds) * 100}%`,
+                      }}
                     />
                   </div>
                 </div>
-                <div className="mt-8 grid items-center gap-7 lg:grid-cols-[.7fr_1.3fr]">
+                <div className="mt-5 grid min-h-0 flex-1 items-center gap-6 lg:grid-cols-[.7fr_1.3fr]">
                   <img
                     src={current.photoUrl || photo}
                     alt={current.name}
-                    className="mx-auto aspect-[4/5] w-full max-w-sm rounded-[28px] object-cover shadow-2xl"
+                    className="mx-auto aspect-[4/5] max-h-[min(54vh,580px)] w-full max-w-sm rounded-[28px] object-cover shadow-2xl"
                   />
                   <div className="text-white">
-                    <p className="flex items-center gap-2 text-sm uppercase tracking-[.24em] text-[#b8ee35]">
-                      <Sparkles className="h-4 w-4" />
+                    <p className="flex items-center gap-2 text-base font-extrabold uppercase tracking-[.22em] text-[#b8ee35]">
+                      <Sparkles className="h-5 w-5" />
                       {current.moment === "INAUGURADA"
                         ? "Inaugurada"
                         : "Em implantação"}
                     </p>
-                    <h2 className="mt-4 text-5xl font-semibold leading-none xl:text-7xl">
+                    <h2 className="mt-3 text-5xl font-semibold leading-none xl:text-6xl">
                       {current.name}
                     </h2>
                     <p className="mt-3 text-2xl text-white/70">
                       {current.unitName}
                     </p>
-                    <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <p className="mt-2 text-sm font-semibold text-white/80">
+                      {current.daysWithoutContact === null
+                        ? "Sem contato registrado"
+                        : current.daysWithoutContact === 0
+                          ? "Último contato: hoje"
+                          : `Último contato há ${current.daysWithoutContact} dias`}
+                    </p>
+                    {current.attention !== "em_dia" && (
+                      <div
+                        className={`mt-3 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold ${current.attention === "urgente" ? "border-yellow-200/80 bg-yellow-300 text-rose-950 shadow-lg shadow-rose-950/30" : current.attention === "critico" ? "border-red-100/40 bg-red-950/30 text-white" : "border-amber-100/40 bg-amber-950/25 text-amber-50"}`}
+                      >
+                        <span aria-hidden="true">
+                          {current.attention === "urgente" ? "🚨" : "⚠"}
+                        </span>
+                        {current.attention === "urgente"
+                          ? `Ação imediata: ${current.daysWithoutContact} dias sem contato`
+                          : `${current.daysWithoutContact} dias sem contato`}
+                      </div>
+                    )}
+                    <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
                       {metrics.map(({ key, label }) => (
                         <div
                           key={key}
@@ -378,6 +465,19 @@ export default function TVPage() {
                         </div>
                       ))}
                     </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-sm">
+                      <span className="font-semibold text-[#b8ee35]">
+                        Presença em Lives
+                      </span>
+                      <span>
+                        {current.livesAttended} compareceu de{" "}
+                        {current.livesInvited} convidado
+                        {current.livesInvited === 1 ? "" : "s"}
+                      </span>
+                      <span className="rounded-full bg-white/15 px-2.5 py-1 text-xs font-bold">
+                        {current.liveAttendanceRate}% de presença
+                      </span>
+                    </div>
                     <QuickContactButtons
                       franchisee={current}
                       onSaved={registerInstantly}
@@ -385,7 +485,7 @@ export default function TVPage() {
                     />
                   </div>
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="mt-4 flex shrink-0 items-center justify-between">
                   <div className="flex gap-2">
                     {data.franchisees.map((item, position) => (
                       <button

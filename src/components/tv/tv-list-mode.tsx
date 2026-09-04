@@ -7,12 +7,18 @@ import {
   LayoutGrid,
   MessageCircle,
   Phone,
+  Radio,
   Search,
   Users,
   Video,
   X,
 } from "lucide-react";
-type Channel = "WHATSAPP" | "TELEFONE" | "VIDEO_CHAMADA" | "PRESENCIAL";
+import {
+  CONTACT_ATTENTION_CONFIG,
+  type ContactAttention,
+} from "@/lib/contact-attention";
+type Channel =
+  "WHATSAPP" | "TELEFONE" | "VIDEO_CHAMADA" | "PRESENCIAL" | "LIVE";
 type Franchisee = {
   id: string;
   name: string;
@@ -24,17 +30,29 @@ type Franchisee = {
   video: number;
   presencial: number;
   live: number;
+  livesInvited: number;
+  livesAttended: number;
+  liveAttendanceRate: number;
+  daysWithoutContact: number | null;
+  attention: ContactAttention;
 };
+type TVPeriod =
+  | "last_7_days"
+  | "last_30_days"
+  | "last_90_days"
+  | "current_month"
+  | "previous_month";
 const channels: [Channel, string, typeof MessageCircle][] = [
   ["WHATSAPP", "WhatsApp", MessageCircle],
   ["TELEFONE", "Telefone", Phone],
   ["VIDEO_CHAMADA", "Vídeo", Video],
   ["PRESENCIAL", "Presencial", Users],
+  ["LIVE", "Live", Radio],
 ];
 const key = (type: Channel) =>
   type === "VIDEO_CHAMADA"
     ? "video"
-    : (type.toLowerCase() as "whatsapp" | "telefone" | "presencial");
+    : (type.toLowerCase() as "whatsapp" | "telefone" | "presencial" | "live");
 export function TVListMode() {
   const [list, setList] = useState<Franchisee[]>([]);
   const [target, setTarget] = useState<Franchisee | null>(null);
@@ -42,6 +60,7 @@ export function TVListMode() {
   const [done, setDone] = useState("");
   const [role, setRole] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [period, setPeriod] = useState<TVPeriod>("last_30_days");
   const [undo, setUndo] = useState<{
     id: string;
     item: Franchisee;
@@ -49,10 +68,10 @@ export function TVListMode() {
   } | null>(null);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    fetch("/api/tv", { cache: "no-store" })
+    fetch("/api/tv?period=" + period, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => setList(d?.franchisees ?? []));
-  }, []);
+  }, [period]);
   useEffect(() => {
     fetch("/api/auth/me")
       .then((response) => (response.ok ? response.json() : null))
@@ -147,6 +166,18 @@ export function TVListMode() {
             </h1>
           </div>
           <div className="flex gap-2">
+            <select
+              value={period}
+              onChange={(event) => setPeriod(event.target.value as TVPeriod)}
+              aria-label="Período exibido na TV"
+              className="rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-[#003b71]"
+            >
+              <option value="last_7_days">Últimos 7 dias</option>
+              <option value="last_30_days">Últimos 30 dias</option>
+              <option value="last_90_days">Últimos 90 dias</option>
+              <option value="current_month">Mês atual</option>
+              <option value="previous_month">Mês anterior</option>
+            </select>
             {role && role !== "TV" && (
               <Link
                 href="/dashboard"
@@ -194,83 +225,99 @@ export function TVListMode() {
         </label>
         <section
           ref={box}
-          className="min-h-0 flex-1 overflow-y-auto rounded-[28px] border border-slate-200 bg-[#f8fbf8] p-4 shadow-xl"
+          className="min-h-0 flex-1 overflow-y-auto rounded-[24px] border border-slate-200 bg-[#f8fbf8] p-3 shadow-xl"
         >
-          <div className="space-y-3">
-            {visible.map((item) => (
-              <article
-                key={item.id}
-                onClick={() => setTarget(item)}
-                className="group grid min-h-32 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-[#0b8f45] hover:shadow-lg hover:shadow-[#0b8f45]/10"
-              >
-                <img
-                  src={
-                    item.photoUrl ||
-                    "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=160&q=80"
-                  }
-                  alt=""
-                  className="h-24 w-24 rounded-2xl border-4 border-[#eef7ef] object-cover shadow-md"
-                />
-                <button className="min-w-0 text-left">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <b className="truncate text-xl text-[#003b71]">
-                      {item.name}
-                    </b>
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${item.moment === "INAUGURADA" ? "bg-[#b8ee35]/40 text-[#003b71]" : "bg-emerald-100 text-[#0b8f45]"}`}
-                    >
-                      {item.moment === "INAUGURADA"
-                        ? "INAUGURADA"
-                        : "EM IMPLANTAÇÃO"}
-                    </span>
-                  </div>
-                  <span className="mt-1 block truncate text-sm text-slate-500">
-                    {item.unitName}
-                  </span>
-                  <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                    {[
-                      ["WhatsApp", item.whatsapp],
-                      ["Telefone", item.telefone],
-                      ["Vídeo", item.video],
-                      ["Presencial", item.presencial],
-                      ["Lives", item.live],
-                    ].map(([name, value]) => (
-                      <span
-                        key={String(name)}
-                        className="rounded-lg border border-slate-100 bg-[#f8fbf8] px-2.5 py-1.5 font-bold text-slate-500"
-                      >
-                        {name} <b className="text-[#003b71]">{value}</b>
-                      </span>
-                    ))}
-                  </div>
-                  <small className="mt-3 block font-bold text-[#0b8f45]">
-                    Toque para abrir o cartão completo
-                  </small>
-                </button>
-                <div
-                  onClick={(e) => e.stopPropagation()}
-                  className="grid grid-cols-2 rounded-2xl border border-slate-100 bg-[#f8fbf8] p-2"
+          <div className="space-y-2">
+            {visible.map((item) => {
+              const attention = CONTACT_ATTENTION_CONFIG[item.attention];
+              return (
+                <article
+                  key={item.id}
+                  onClick={() => setTarget(item)}
+                  className={`group grid min-h-24 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 rounded-2xl border p-3.5 shadow-sm transition duration-200 hover:shadow-md ${attention.listClass} ${item.attention === "urgente" ? "animate-pulse" : ""}`}
                 >
-                  <p className="col-span-2 mb-1 px-1 text-[10px] font-bold uppercase tracking-[.16em] text-slate-400">
-                    Registrar agora
-                  </p>
-                  <div className="col-span-2 grid grid-cols-2 gap-3">
-                    {channels.map(([type, label, Icon]) => (
-                      <button
-                        key={type}
-                        onClick={() => save(item, type)}
-                        disabled={Boolean(saving)}
-                        className="group/button flex min-h-16 items-center gap-2 rounded-xl border border-[#0b8f45]/15 bg-white px-4 text-sm font-bold text-[#003b71] shadow-sm transition hover:scale-[1.02] hover:border-[#0b8f45] hover:bg-[#0b8f45] hover:text-white disabled:opacity-50"
+                  <img
+                    src={
+                      item.photoUrl ||
+                      "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=160&q=80"
+                    }
+                    alt=""
+                    className="h-18 w-18 rounded-xl border-2 border-[#eef7ef] object-cover shadow-sm"
+                  />
+                  <button className="min-w-0 text-left">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <b className="truncate text-lg text-[#003b71]">
+                        {item.name}
+                      </b>
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-extrabold ${attention.tagClass}`}
                       >
-                        <Icon className="h-4 w-4 text-[#0b8f45] transition group-hover/button:text-white" />
-                        {saving === `${item.id}-${type}` ? "..." : label}
-                      </button>
-                    ))}
+                        {attention.emoji} {attention.label}
+                      </span>
+                      <span
+                        className={`rounded-full px-3 py-1.5 text-xs font-extrabold tracking-wide ${item.moment === "INAUGURADA" ? "bg-[#b8ee35]/40 text-[#003b71]" : "bg-emerald-100 text-[#0b8f45]"}`}
+                      >
+                        {item.moment === "INAUGURADA"
+                          ? "INAUGURADA"
+                          : "EM IMPLANTAÇÃO"}
+                      </span>
+                    </div>
+                    <span className="mt-1 block truncate text-sm text-slate-500">
+                      {item.unitName}
+                    </span>
+                    <span className="mt-1 block text-xs font-semibold text-slate-600">
+                      {item.daysWithoutContact === null
+                        ? "Sem contato registrado"
+                        : item.daysWithoutContact === 0
+                          ? "Último contato: hoje"
+                          : `Último contato há ${item.daysWithoutContact} dias`}
+                    </span>
+                    <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
+                      {[
+                        ["WhatsApp", item.whatsapp],
+                        ["Telefone", item.telefone],
+                        ["Vídeo", item.video],
+                        ["Presencial", item.presencial],
+                        ["Contatos Live", item.live],
+                        [
+                          "Presença",
+                          `${item.livesAttended}/${item.livesInvited} · ${item.liveAttendanceRate}%`,
+                        ],
+                      ].map(([name, value]) => (
+                        <span
+                          key={String(name)}
+                          className="rounded-md border border-slate-100 bg-[#f8fbf8] px-2 py-1 font-bold text-slate-500"
+                        >
+                          {name} <b className="text-[#003b71]">{value}</b>
+                        </span>
+                      ))}
+                    </div>
+                  </button>
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-[min(44vw,610px)] rounded-xl border border-slate-100 bg-[#f8fbf8] p-2"
+                  >
+                    <p className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-[.16em] text-slate-400">
+                      Registrar agora
+                    </p>
+                    <div className="grid grid-cols-5 gap-2">
+                      {channels.map(([type, label, Icon]) => (
+                        <button
+                          key={type}
+                          onClick={() => save(item, type)}
+                          disabled={Boolean(saving)}
+                          className="group/button flex min-h-12 items-center justify-center gap-1.5 rounded-lg border border-[#0b8f45]/15 bg-white px-2 text-xs font-bold text-[#003b71] shadow-sm transition hover:border-[#0b8f45] hover:bg-[#0b8f45] hover:text-white disabled:opacity-50"
+                        >
+                          <Icon className="h-4 w-4 text-[#0b8f45] transition group-hover/button:text-white" />
+                          {saving === `${item.id}-${type}` ? "..." : label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                {done === item.id && <Check className="text-[#0b8f45]" />}
-              </article>
-            ))}
+                  {done === item.id && <Check className="text-[#0b8f45]" />}
+                </article>
+              );
+            })}
             {!visible.length && (
               <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center text-slate-500">
                 Nenhum franqueado encontrado.
@@ -323,13 +370,13 @@ export function TVListMode() {
                 <p className="text-slate-500">{target.unitName}</p>
               </div>
             </div>
-            <div className="mt-8 grid grid-cols-2 gap-4">
+            <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-5">
               {channels.map(([type, label, Icon]) => (
                 <button
                   key={type}
                   onClick={() => save(target, type)}
                   disabled={Boolean(saving)}
-                  className="flex min-h-28 flex-col items-center justify-center gap-3 rounded-2xl border-2 border-slate-100 bg-[#f8fbf8] text-[#003b71] transition hover:-translate-y-0.5 hover:border-[#0b8f45] hover:bg-[#eef7ef] disabled:opacity-50"
+                  className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl border-2 border-slate-100 bg-[#f8fbf8] px-2 text-[#003b71] transition hover:-translate-y-0.5 hover:border-[#0b8f45] hover:bg-[#eef7ef] disabled:opacity-50"
                 >
                   <Icon className="h-7 w-7 text-[#0b8f45]" />
                   <b>

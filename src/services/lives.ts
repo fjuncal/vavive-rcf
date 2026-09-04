@@ -7,17 +7,32 @@ const liveInputSchema = z
     title: z.string().trim().min(2, "Informe o título da Live.").max(160),
     scheduledAt: z.string().datetime("Informe uma data e horário válidos."),
     hostUserId: z.string().min(1, "Selecione quem realizou a Live."),
-    participantIds: z
+    guestIds: z
       .array(z.string().min(1))
-      .min(1, "Selecione ao menos um participante."),
+      .min(1, "Selecione ao menos um convidado."),
+    attendeeIds: z.array(z.string().min(1)).default([]),
     notes: z.string().trim().max(1000).optional().or(z.literal("")),
   })
   .superRefine((value, context) => {
-    if (new Set(value.participantIds).size !== value.participantIds.length) {
+    if (new Set(value.guestIds).size !== value.guestIds.length) {
       context.addIssue({
         code: "custom",
-        path: ["participantIds"],
-        message: "Há participantes duplicados.",
+        path: ["guestIds"],
+        message: "Há convidados duplicados.",
+      });
+    }
+    if (new Set(value.attendeeIds).size !== value.attendeeIds.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["attendeeIds"],
+        message: "Há presenças duplicadas.",
+      });
+    }
+    if (value.attendeeIds.some((id) => !value.guestIds.includes(id))) {
+      context.addIssue({
+        code: "custom",
+        path: ["attendeeIds"],
+        message: "Todos os presentes precisam estar na lista de convidados.",
       });
     }
   });
@@ -43,16 +58,16 @@ async function validateReferences(
       select: { id: true },
     }),
     tx.franchisee.findMany({
-      where: { id: { in: input.participantIds }, active: true },
+      where: { id: { in: input.guestIds }, active: true },
       select: { id: true },
     }),
   ]);
 
   if (!host)
     throw new Error("Selecione um responsável ativo que não seja da TV.");
-  if (franchisees.length !== input.participantIds.length) {
+  if (franchisees.length !== input.guestIds.length) {
     throw new Error(
-      "Um ou mais participantes não estão ativos ou não foram encontrados.",
+      "Um ou mais convidados não estão ativos ou não foram encontrados.",
     );
   }
 }
@@ -64,6 +79,28 @@ function contactData(input: LiveInput) {
     userId: input.hostUserId,
     notes: input.title,
   };
+}
+
+async function createParticipation(
+  tx: Prisma.TransactionClient,
+  liveId: string,
+  franchiseeId: string,
+  attended: boolean,
+  input: LiveInput,
+) {
+  const contact = attended
+    ? await tx.contact.create({
+        data: { franchiseeId, ...contactData(input) },
+      })
+    : null;
+  return tx.liveParticipant.create({
+    data: {
+      liveId,
+      franchiseeId,
+      attended,
+      contactId: contact?.id,
+    },
+  });
 }
 
 export type LiveFilters = {
@@ -90,9 +127,10 @@ function periodRange(period: LiveFilters["period"]) {
   return undefined;
 }
 
-export async function listLives(filters: LiveFilters = {}) {
+function livesWhere(filters: LiveFilters): Prisma.LiveWhereInput {
   const now = new Date();
-  const where: Prisma.LiveWhereInput = {
+  const range = periodRange(filters.period);
+  return {
     AND: [
       filters.search
         ? {
@@ -112,66 +150,37 @@ export async function listLives(filters: LiveFilters = {}) {
         : filters.status === "completed"
           ? { scheduledAt: { lte: now } }
           : {},
-      periodRange(filters.period)
-        ? { scheduledAt: periodRange(filters.period) }
-        : {},
+      range ? { scheduledAt: range } : {},
     ],
   };
+}
+
+export async function listLives(filters: LiveFilters = {}) {
   return prisma.live.findMany({
-    where,
+    where: livesWhere(filters),
     orderBy: { scheduledAt: "desc" },
     include: {
       hostUser: { select: { name: true } },
-      _count: { select: { participants: true } },
+      participants: { select: { attended: true } },
     },
   });
 }
 
 export async function getLivesSummary(filters: LiveFilters = {}) {
-  const now = new Date();
-  const where: Prisma.LiveWhereInput = {
-    AND: [
-      filters.search
-        ? {
-            OR: [
-              { title: { contains: filters.search, mode: "insensitive" } },
-              {
-                hostUser: {
-                  name: { contains: filters.search, mode: "insensitive" },
-                },
-              },
-            ],
-          }
-        : {},
-      filters.hostUserId ? { hostUserId: filters.hostUserId } : {},
-      filters.status === "scheduled"
-        ? { scheduledAt: { gt: now } }
-        : filters.status === "completed"
-          ? { scheduledAt: { lte: now } }
-          : {},
-      periodRange(filters.period)
-        ? { scheduledAt: periodRange(filters.period) }
-        : {},
-    ],
-  };
   const lives = await prisma.live.findMany({
-    where,
+    where: livesWhere(filters),
     select: {
-      scheduledAt: true,
-      participants: { select: { franchiseeId: true } },
+      participants: { select: { franchiseeId: true, attended: true } },
     },
   });
+  const attendees = lives.flatMap((live) =>
+    live.participants.filter((participant) => participant.attended),
+  );
   return {
     count: lives.length,
-    participations: lives.reduce(
-      (total, live) => total + live.participants.length,
-      0,
-    ),
-    uniqueParticipants: new Set(
-      lives.flatMap((live) =>
-        live.participants.map((participant) => participant.franchiseeId),
-      ),
-    ).size,
+    participations: attendees.length,
+    uniqueParticipants: new Set(attendees.map((item) => item.franchiseeId))
+      .size,
   };
 }
 
@@ -238,15 +247,17 @@ export async function createLive(rawInput: unknown, createdByUserId: string) {
       },
     });
 
+    const attendees = new Set(input.attendeeIds);
     await Promise.all(
-      input.participantIds.map(async (franchiseeId) => {
-        const contact = await tx.contact.create({
-          data: { franchiseeId, ...contactData(input) },
-        });
-        await tx.liveParticipant.create({
-          data: { liveId: live.id, franchiseeId, contactId: contact.id },
-        });
-      }),
+      input.guestIds.map((franchiseeId) =>
+        createParticipation(
+          tx,
+          live.id,
+          franchiseeId,
+          attendees.has(franchiseeId),
+          input,
+        ),
+      ),
     );
     return live;
   });
@@ -259,23 +270,22 @@ export async function updateLive(id: string, rawInput: unknown) {
     const existing = await tx.live.findUnique({
       where: { id },
       include: {
-        participants: { select: { franchiseeId: true, contactId: true } },
+        participants: {
+          select: {
+            id: true,
+            franchiseeId: true,
+            contactId: true,
+            attended: true,
+          },
+        },
       },
     });
     if (!existing) throw new Error("Live não encontrada.");
 
-    const wanted = new Set(input.participantIds);
+    const guests = new Set(input.guestIds);
+    const attendees = new Set(input.attendeeIds);
     const existingByFranchisee = new Map(
       existing.participants.map((item) => [item.franchiseeId, item]),
-    );
-    const toRemove = existing.participants.filter(
-      (item) => !wanted.has(item.franchiseeId),
-    );
-    const toAdd = input.participantIds.filter(
-      (franchiseeId) => !existingByFranchisee.has(franchiseeId),
-    );
-    const toKeep = existing.participants.filter((item) =>
-      wanted.has(item.franchiseeId),
     );
 
     await tx.live.update({
@@ -287,29 +297,61 @@ export async function updateLive(id: string, rawInput: unknown) {
         hostUserId: input.hostUserId,
       },
     });
-    await Promise.all(
-      toRemove.map((item) =>
-        tx.contact.delete({ where: { id: item.contactId } }),
-      ),
-    );
-    await Promise.all(
-      toKeep.map((item) =>
-        tx.contact.update({
-          where: { id: item.contactId },
-          data: contactData(input),
-        }),
-      ),
-    );
-    await Promise.all(
-      toAdd.map(async (franchiseeId) => {
+
+    for (const participant of existing.participants) {
+      if (!guests.has(participant.franchiseeId)) {
+        if (participant.contactId)
+          await tx.contact.delete({ where: { id: participant.contactId } });
+        await tx.liveParticipant.delete({ where: { id: participant.id } });
+        continue;
+      }
+
+      const attended = attendees.has(participant.franchiseeId);
+      if (attended && !participant.contactId) {
         const contact = await tx.contact.create({
-          data: { franchiseeId, ...contactData(input) },
+          data: {
+            franchiseeId: participant.franchiseeId,
+            ...contactData(input),
+          },
         });
-        await tx.liveParticipant.create({
-          data: { liveId: id, franchiseeId, contactId: contact.id },
+        await tx.liveParticipant.update({
+          where: { id: participant.id },
+          data: { attended: true, contactId: contact.id },
         });
-      }),
-    );
+      } else if (!attended && participant.contactId) {
+        await tx.contact.delete({ where: { id: participant.contactId } });
+        await tx.liveParticipant.update({
+          where: { id: participant.id },
+          data: { attended: false, contactId: null },
+        });
+      } else if (attended && participant.contactId) {
+        await tx.contact.update({
+          where: { id: participant.contactId },
+          data: contactData(input),
+        });
+        await tx.liveParticipant.update({
+          where: { id: participant.id },
+          data: { attended: true },
+        });
+      } else if (participant.attended) {
+        await tx.liveParticipant.update({
+          where: { id: participant.id },
+          data: { attended: false },
+        });
+      }
+    }
+
+    for (const franchiseeId of input.guestIds) {
+      if (!existingByFranchisee.has(franchiseeId)) {
+        await createParticipation(
+          tx,
+          id,
+          franchiseeId,
+          attendees.has(franchiseeId),
+          input,
+        );
+      }
+    }
 
     return tx.live.findUnique({ where: { id } });
   });
@@ -323,9 +365,11 @@ export async function deleteLive(id: string) {
     });
     if (!live) throw new Error("Live não encontrada.");
     await Promise.all(
-      live.participants.map((participant) =>
-        tx.contact.delete({ where: { id: participant.contactId } }),
-      ),
+      live.participants
+        .filter((participant) => participant.contactId)
+        .map((participant) =>
+          tx.contact.delete({ where: { id: participant.contactId! } }),
+        ),
     );
     await tx.live.delete({ where: { id } });
   });

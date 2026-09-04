@@ -36,6 +36,7 @@ type Detail = LiveFormValue & {
     unitName: string;
     photoUrl: string | null;
     moment: "IMPLANTACAO" | "INAUGURADA";
+    attended: boolean;
   }>;
 };
 
@@ -77,6 +78,7 @@ export function LiveDetails({
       ),
     [live.participants, query],
   );
+  const attendees = participants.filter((item) => item.attended);
 
   return (
     <div className="mx-auto max-w-[1500px] space-y-7">
@@ -115,7 +117,8 @@ export function LiveDetails({
               </span>
               <span className="inline-flex items-center gap-2">
                 <Users className="h-4 w-4 text-[var(--brand-primary)]" />
-                {live.participants.length} participantes
+                {live.participants.filter((item) => item.attended).length}/
+                {live.participants.length} presentes
               </span>
               <span className="inline-flex items-center gap-2">
                 <UserRound className="h-4 w-4 text-[var(--brand-primary)]" />
@@ -160,10 +163,10 @@ export function LiveDetails({
             <div className="flex flex-col gap-4 border-b border-[var(--border)] px-5 py-5 sm:flex-row sm:items-center sm:justify-between lg:px-6">
               <div>
                 <h2 className="text-lg font-bold text-[var(--brand-secondary)]">
-                  Participantes
+                  Convidados
                 </h2>
                 <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                  {live.participants.length} franqueados vinculados a esta live.
+                  {live.participants.length} convidados para esta Live.
                 </p>
               </div>
               <label className="flex h-10 w-full items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 transition focus-within:border-[var(--brand-primary)] focus-within:ring-4 focus-within:ring-[var(--brand-primary)]/10 sm:max-w-xs">
@@ -178,49 +181,37 @@ export function LiveDetails({
             </div>
 
             {participants.length ? (
-              <div className="divide-y divide-[var(--border)]">
-                {participants.map((item) => (
-                  <Link
-                    href={`/franqueados/${item.id}`}
-                    key={item.id}
-                    className="group flex flex-col gap-3 px-5 py-4 transition hover:bg-[var(--background)]/70 sm:flex-row sm:items-center lg:px-6"
-                  >
-                    <div className="flex min-w-0 flex-1 items-center gap-3">
-                      {item.photoUrl ? (
-                        <Image
-                          src={item.photoUrl}
-                          alt=""
-                          width={44}
-                          height={44}
-                          unoptimized
-                          className="h-11 w-11 shrink-0 rounded-full object-cover"
-                        />
-                      ) : (
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--background)] text-sm font-bold text-[var(--brand-primary)]">
-                          {item.name.slice(0, 2).toUpperCase()}
-                        </span>
-                      )}
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-bold text-[var(--brand-secondary)]">
-                          {item.name}
-                        </p>
-                        <p className="mt-0.5 truncate text-sm text-[var(--text-secondary)]">
-                          {item.unitName}
-                        </p>
-                      </div>
+              <>
+                <ParticipantRows items={participants} />
+                <div className="border-t border-[var(--border)] bg-slate-50/60 px-5 py-4 lg:px-6">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="font-bold text-[var(--brand-secondary)]">
+                        Compareceram
+                      </h3>
+                      <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                        {attendees.length} de {participants.length} convidados
+                        presentes.
+                      </p>
                     </div>
-                    <span className="w-fit rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
-                      {item.moment === "INAUGURADA"
-                        ? "Inaugurada"
-                        : "Em implantação"}
+                    <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
+                      {participants.length
+                        ? Math.round(
+                            (attendees.length / participants.length) * 100,
+                          )
+                        : 0}
+                      % presença
                     </span>
-                    <span className="inline-flex items-center gap-1.5 text-sm font-bold text-[var(--brand-primary)]">
-                      Ver franqueado
-                      <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
-                    </span>
-                  </Link>
-                ))}
-              </div>
+                  </div>
+                </div>
+                {attendees.length ? (
+                  <ParticipantRows items={attendees} attendedOnly />
+                ) : (
+                  <p className="px-6 py-8 text-sm text-[var(--text-secondary)]">
+                    Nenhum convidado foi marcado como presente.
+                  </p>
+                )}
+              </>
             ) : (
               <div className="px-6 py-14 text-center">
                 <Search className="mx-auto h-6 w-6 text-slate-300" />
@@ -294,7 +285,8 @@ export function LiveDetails({
             title: live.title,
             scheduledAt: live.scheduledAt,
             hostUserId: live.hostUserId,
-            participantIds: live.participantIds,
+            guestIds: live.guestIds,
+            attendeeIds: live.attendeeIds,
             notes: live.notes,
           }}
           hosts={hosts}
@@ -338,6 +330,69 @@ function AuditItem({ label, value }: { label: string; value: string }) {
       <dd className="mt-1 text-sm font-bold text-[var(--text-primary)]">
         {value}
       </dd>
+    </div>
+  );
+}
+
+function ParticipantRows({
+  items,
+  attendedOnly = false,
+}: {
+  items: Detail["participants"];
+  attendedOnly?: boolean;
+}) {
+  return (
+    <div className="divide-y divide-[var(--border)]">
+      {items.map((item) => (
+        <Link
+          href={`/franqueados/${item.id}`}
+          key={item.id}
+          className="group flex flex-col gap-3 px-5 py-4 transition hover:bg-[var(--background)]/70 sm:flex-row sm:items-center lg:px-6"
+        >
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            {item.photoUrl ? (
+              <Image
+                src={item.photoUrl}
+                alt=""
+                width={44}
+                height={44}
+                unoptimized
+                className="h-11 w-11 shrink-0 rounded-full object-cover"
+              />
+            ) : (
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--background)] text-sm font-bold text-[var(--brand-primary)]">
+                {item.name.slice(0, 2).toUpperCase()}
+              </span>
+            )}
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold text-[var(--brand-secondary)]">
+                {item.name}
+              </p>
+              <p className="mt-0.5 truncate text-sm text-[var(--text-secondary)]">
+                {item.unitName}
+              </p>
+            </div>
+          </div>
+          <span className="w-fit rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+            {item.moment === "INAUGURADA" ? "Inaugurada" : "Em implantação"}
+          </span>
+          {!attendedOnly ? (
+            <span
+              className={`w-fit rounded-full px-2.5 py-1 text-xs font-bold ${
+                item.attended
+                  ? "bg-emerald-50 text-emerald-700"
+                  : "bg-slate-100 text-slate-500"
+              }`}
+            >
+              {item.attended ? "Presente" : "Não compareceu"}
+            </span>
+          ) : null}
+          <span className="inline-flex items-center gap-1.5 text-sm font-bold text-[var(--brand-primary)]">
+            Ver franqueado
+            <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
+          </span>
+        </Link>
+      ))}
     </div>
   );
 }

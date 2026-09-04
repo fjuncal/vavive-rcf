@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "db:seed": "prisma db seed",
     "db:bootstrap-production": "tsx prisma/bootstrap-production.ts",
-    "db:promote-superadmin": "tsx prisma/promote-superadmin.ts"
+    "db:promote-superadmin": "tsx prisma/promote-superadmin.ts",
+    "db:mock-attention": "tsx prisma/mock-contact-attention.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

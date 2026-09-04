@@ -27,7 +27,10 @@ export default async function LiveDetailPage({
         createdByName: live.createdByUser.name,
         createdAt: live.createdAt.toISOString(),
         updatedAt: live.updatedAt.toISOString(),
-        participantIds: live.participants.map((item) => item.franchiseeId),
+        guestIds: live.participants.map((item) => item.franchiseeId),
+        attendeeIds: live.participants
+          .filter((item) => item.attended)
+          .map((item) => item.franchiseeId),
         notes: live.notes ?? "",
         participants: live.participants.map((item) => ({
           id: item.franchisee.id,
@@ -35,6 +38,7 @@ export default async function LiveDetailPage({
           unitName: item.franchisee.unitName,
           photoUrl: item.franchisee.photoUrl,
           moment: item.franchisee.moment,
+          attended: item.attended,
         })),
       }}
       hosts={options.hosts}

@@ -28,7 +28,8 @@ export type LiveListItem = {
   title: string;
   scheduledAt: string;
   hostName: string;
-  participantCount: number;
+  guestCount: number;
+  attendeeCount: number;
   notes: string | null;
   status: "scheduled" | "completed";
 };
@@ -421,7 +422,7 @@ function LiveRow({ live }: { live: LiveListItem }) {
 
       <span className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
         <Users className="h-4 w-4 text-[var(--brand-primary)]" />
-        {live.participantCount} participantes
+        {live.attendeeCount}/{live.guestCount} presentes
       </span>
 
       <StatusBadge status={live.status} />

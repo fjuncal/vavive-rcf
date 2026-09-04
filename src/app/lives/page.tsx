@@ -37,7 +37,8 @@ export default async function LivesPage({
         title: live.title,
         scheduledAt: live.scheduledAt.toISOString(),
         hostName: live.hostUser.name,
-        participantCount: live._count.participants,
+        guestCount: live.participants.length,
+        attendeeCount: live.participants.filter((item) => item.attended).length,
         notes: live.notes,
         status: live.scheduledAt > now ? "scheduled" : "completed",
       }))}

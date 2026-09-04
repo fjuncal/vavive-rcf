@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { MessageCircle, Phone, Users, Video } from "lucide-react";
+import { MessageCircle, Phone, Radio, Users, Video } from "lucide-react";
 export type TVFranchisee = {
   id: string;
   name: string;
@@ -8,7 +8,7 @@ export type TVFranchisee = {
   photoUrl?: string | null;
 };
 export type ContactChannel =
-  "WHATSAPP" | "TELEFONE" | "VIDEO_CHAMADA" | "PRESENCIAL";
+  "WHATSAPP" | "TELEFONE" | "VIDEO_CHAMADA" | "PRESENCIAL" | "LIVE";
 type Recent = {
   id: string;
   type: ContactChannel | "LIVE";
@@ -20,6 +20,7 @@ const channels = [
   { type: "TELEFONE", label: "Telefone", icon: Phone },
   { type: "VIDEO_CHAMADA", label: "Vídeo", icon: Video },
   { type: "PRESENCIAL", label: "Presencial", icon: Users },
+  { type: "LIVE", label: "Live", icon: Radio },
 ] as const;
 const labels: Record<Recent["type"], string> = {
   WHATSAPP: "WhatsApp",
@@ -43,10 +44,14 @@ export function QuickContactButtons({
   franchisee,
   onSaved,
   onUndone,
+  compact = false,
+  dense = false,
 }: {
   franchisee: TVFranchisee;
   onSaved: (id: string, type: ContactChannel) => void;
   onUndone?: () => void;
+  compact?: boolean;
+  dense?: boolean;
 }) {
   const [saved, setSaved] = useState<ContactChannel | null>(null);
   const [saving, setSaving] = useState<ContactChannel | null>(null);
@@ -120,17 +125,21 @@ export function QuickContactButtons({
   }
   const latest = history[0];
   return (
-    <div className="mt-5">
-      <p className="mb-2 text-sm font-medium text-white/70">
+    <div className={dense ? "mt-2" : compact ? "mt-3" : "mt-4"}>
+      <p
+        className={`${dense ? "sr-only" : "mb-2"} font-medium text-white/70 ${compact ? "text-xs" : "text-sm"}`}
+      >
         Registrar comunicação
       </p>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div
+        className={`grid grid-cols-5 gap-2 ${compact ? "text-[10px]" : "text-sm"}`}
+      >
         {channels.map(({ type, label, icon: Icon }) => (
           <button
             key={type}
             disabled={Boolean(saving)}
             onClick={() => save(type)}
-            className={`flex min-h-14 items-center justify-center gap-2 rounded-xl border text-sm font-semibold transition disabled:opacity-70 ${saved === type ? "border-[#b8ee35] bg-[#b8ee35] text-[#003b71]" : "border-white/20 bg-white/10 text-white"}`}
+            className={`flex items-center justify-center gap-1 rounded-xl border font-semibold transition disabled:opacity-70 ${dense ? "min-h-10 px-0.5 text-[10px]" : compact ? "min-h-10 px-1" : "min-h-14 gap-2 text-sm"} ${saved === type ? "border-[#b8ee35] bg-[#b8ee35] text-[#003b71]" : "border-white/20 bg-white/10 text-white"}`}
           >
             <Icon className="h-4 w-4" />
             {saving === type ? "Salvando..." : saved === type ? "Salvo" : label}
@@ -153,52 +162,92 @@ export function QuickContactButtons({
           </button>
         </div>
       )}
-      <section className="mt-3 rounded-2xl border border-white/15 bg-[#002f5a]/30 p-3.5">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-bold uppercase tracking-[.18em] text-[#b8ee35]">
-            Último contato
-          </p>
-          {latest && (
-            <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs font-bold text-white">
-              {labels[latest.type]}
-            </span>
-          )}
-        </div>
-        {latest ? (
-          <p className="mt-2 text-sm text-white">
-            {date(latest.contactedAt)} às {time(latest.contactedAt)}
-          </p>
-        ) : (
-          <p className="mt-2 text-sm text-white/65">
-            Nenhum contato registrado.
-          </p>
-        )}
-        <div className="mt-3 border-t border-white/10 pt-2.5">
-          <p className="mb-2 text-xs font-bold uppercase tracking-[.18em] text-white/55">
-            Histórico recente
-          </p>
-          <div className="space-y-1.5">
-            {history.slice(0, 3).map((item) => (
-              <div
-                key={item.id}
-                className="flex items-center justify-between gap-3 text-xs"
-              >
-                <span className="font-semibold text-white">
-                  {labels[item.type]}
-                </span>
-                <span className="text-right text-white/65">
-                  {date(item.contactedAt)} · {time(item.contactedAt)}
-                </span>
-              </div>
-            ))}
-            {!history.length && (
-              <p className="text-xs text-white/55">
-                Sem interações anteriores.
-              </p>
+      {!compact ? (
+        <section className="mt-3 rounded-2xl border border-white/15 bg-[#002f5a]/30 p-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold uppercase tracking-[.18em] text-[#b8ee35]">
+              Último contato
+            </p>
+            {latest && (
+              <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs font-bold text-white">
+                {labels[latest.type]}
+              </span>
             )}
           </div>
-        </div>
-      </section>
+          {latest ? (
+            <p className="mt-1 text-sm text-white">
+              {date(latest.contactedAt)} às {time(latest.contactedAt)}
+            </p>
+          ) : (
+            <p className="mt-1 text-sm text-white/65">
+              Nenhum contato registrado.
+            </p>
+          )}
+          <div className="mt-2 border-t border-white/10 pt-2">
+            <p className="mb-1.5 text-xs font-bold uppercase tracking-[.18em] text-white/55">
+              Histórico recente
+            </p>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+              {history.slice(0, 2).map((item) => (
+                <div
+                  key={item.id}
+                  className="flex min-w-0 items-center justify-between gap-2 text-xs"
+                >
+                  <span className="truncate font-semibold text-white">
+                    {labels[item.type]}
+                  </span>
+                  <span className="shrink-0 text-right text-white/65">
+                    {date(item.contactedAt)} · {time(item.contactedAt)}
+                  </span>
+                </div>
+              ))}
+              {!history.length && (
+                <p className="text-xs text-white/55">
+                  Sem interações anteriores.
+                </p>
+              )}
+            </div>
+          </div>
+        </section>
+      ) : (
+        <section
+          className={`rounded-xl border border-white/15 bg-[#002f5a]/30 ${dense ? "mt-1 px-2 py-1.5" : "mt-2 px-3 py-2.5"}`}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#b8ee35]">
+              Histórico recente
+            </p>
+            {latest ? (
+              <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold text-white">
+                Último: {labels[latest.type]}
+              </span>
+            ) : null}
+          </div>
+          {history.length ? (
+            <div
+              className={`grid gap-x-3 text-[10px] ${dense ? "mt-1 grid-cols-1" : "mt-1.5 grid-cols-2"}`}
+            >
+              {history.slice(0, dense ? 1 : 2).map((item) => (
+                <div
+                  key={item.id}
+                  className="flex min-w-0 items-center justify-between gap-2 text-white/75"
+                >
+                  <span className="truncate font-semibold text-white">
+                    {labels[item.type]}
+                  </span>
+                  <span className="shrink-0">
+                    {date(item.contactedAt)} · {time(item.contactedAt)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-1 text-[10px] text-white/55">
+              Nenhum contato registrado.
+            </p>
+          )}
+        </section>
+      )}
     </div>
   );
 }

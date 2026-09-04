@@ -10,6 +10,7 @@ export const QUALIFIED_CONTACT_TYPES: ContactType[] = [
   "TELEFONE",
   "VIDEO_CHAMADA",
   "PRESENCIAL",
+  "LIVE",
 ];
 export const CONTACT_ATTENTION = {
   warningAfterDays: 7,
