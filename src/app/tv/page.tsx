@@ -1,6 +1,6 @@
 "use client";
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Activity,
@@ -179,8 +179,12 @@ export default function TVPage() {
   const [seconds, setSeconds] = useState(12);
   const [role, setRole] = useState<string | null>(null);
   const [now, setNow] = useState(new Date());
+  const [currentData, setCurrentData] = useState<Franchisee | null>(null);
+  const detailRequest = useRef<AbortController | null>(null);
   const active = Math.min(index, Math.max(0, data.franchisees.length - 1));
-  const current = data.franchisees[active];
+  const selected = data.franchisees[active];
+  const selectedId = selected?.id;
+  const current = currentData?.id === selected?.id ? currentData : selected;
   const currentAttention = current
     ? CONTACT_ATTENTION_CONFIG[current.attention]
     : CONTACT_ATTENTION_CONFIG.em_dia;
@@ -196,11 +200,46 @@ export default function TVPage() {
       if (response.ok) setData(await response.json());
     } catch {}
   }, [period, router]);
+  const refreshCurrent = useCallback(
+    async (franchiseeId: string) => {
+      detailRequest.current?.abort();
+      const controller = new AbortController();
+      detailRequest.current = controller;
+      try {
+        const response = await fetch(
+          `/api/tv/franchisee/${franchiseeId}?period=${period}`,
+          {
+            cache: "no-store",
+            signal: controller.signal,
+          },
+        );
+        if (!response.ok || controller.signal.aborted) return;
+        const updated = (await response.json()) as Franchisee;
+        if (controller.signal.aborted) return;
+        setCurrentData(updated);
+        setData((previous) => ({
+          ...previous,
+          franchisees: previous.franchisees.map((item) =>
+            item.id === updated.id ? updated : item,
+          ),
+        }));
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError"))
+          return;
+      }
+    },
+    [period],
+  );
   useEffect(() => {
     void refresh();
     const interval = window.setInterval(refresh, 60_000);
     return () => window.clearInterval(interval);
   }, [refresh]);
+  useEffect(() => {
+    if (!selectedId) return;
+    void refreshCurrent(selectedId);
+    return () => detailRequest.current?.abort();
+  }, [refreshCurrent, selectedId]);
   useEffect(() => {
     fetch("/api/auth/me")
       .then((response) => (response.ok ? response.json() : null))
@@ -243,6 +282,7 @@ export default function TVPage() {
   const select = (id: string) => {
     const target = data.franchisees.findIndex((item) => item.id === id);
     if (target >= 0) {
+      setCurrentData(null);
       setIndex(target);
       setSeconds(
         CONTACT_ATTENTION_CONFIG[data.franchisees[target].attention]
@@ -299,9 +339,9 @@ export default function TVPage() {
           ),
         };
       });
-      void refresh();
+      void Promise.all([refresh(), refreshCurrent(franchiseeId)]);
     },
-    [refresh],
+    [refresh, refreshCurrent],
   );
   const logout = async () => {
     try {
@@ -318,8 +358,8 @@ export default function TVPage() {
       )
     : 0;
   return (
-    <main className="min-h-screen bg-[#eef7ef] p-5 text-[#073b36] lg:p-8">
-      <div className="mx-auto flex h-[calc(100vh-2.5rem)] max-w-[1920px] flex-col gap-5">
+    <main className="tv-shell bg-[#eef7ef] text-[#073b36]">
+      <div className="tv-frame mx-auto flex max-w-[1920px] flex-col gap-3 lg:gap-5">
         <header className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white">
@@ -390,7 +430,7 @@ export default function TVPage() {
               {current.attention === "urgente" && (
                 <div className="pointer-events-none absolute inset-x-0 top-0 h-2 bg-[#facc15] shadow-[0_0_24px_rgba(250,204,21,0.95)]" />
               )}
-              <div className="flex h-full flex-col p-5 lg:p-6">
+              <div className="tv-primary-card flex h-full flex-col p-5 lg:p-6">
                 <div>
                   <div className="flex justify-between gap-4">
                     <span className="rounded-full bg-[#b8ee35] px-4 py-2 text-xs font-bold uppercase tracking-widest text-[#003b71]">

@@ -154,8 +154,8 @@ export function TVListMode() {
       .includes(query.toLocaleLowerCase("pt-BR")),
   );
   return (
-    <main className="min-h-screen bg-[#eef7ef] p-5 lg:p-8">
-      <div className="mx-auto flex h-[calc(100vh-2.5rem)] max-w-[1800px] flex-col gap-4">
+    <main className="tv-shell bg-[#eef7ef]">
+      <div className="tv-frame mx-auto flex max-w-[1800px] flex-col gap-3 lg:gap-4">
         <header className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-[.24em] text-[#0b8f45]">

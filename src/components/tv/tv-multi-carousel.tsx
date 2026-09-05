@@ -2,7 +2,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronLeft,
@@ -68,6 +68,7 @@ export function TVMultiCarousel({ slots }: { slots: Slots }) {
   const [period, setPeriod] = useState<TVPeriod>("last_30_days");
   const [start, setStart] = useState(0);
   const [role, setRole] = useState<string | null>(null);
+  const refreshRequest = useRef<AbortController | null>(null);
   const visible = useMemo(() => {
     if (!data.franchisees.length) return [];
     return Array.from(
@@ -85,23 +86,35 @@ export function TVMultiCarousel({ slots }: { slots: Slots }) {
   const [seconds, setSeconds] = useState(rotationSeconds);
 
   const refresh = useCallback(async () => {
+    refreshRequest.current?.abort();
+    const controller = new AbortController();
+    refreshRequest.current = controller;
     try {
       const response = await fetch("/api/tv?period=" + period, {
         cache: "no-store",
+        signal: controller.signal,
       });
       if (response.status === 401) {
         router.replace("/tv/login");
         return;
       }
-      if (response.ok) setData(await response.json());
-    } catch {}
+      if (response.ok && !controller.signal.aborted)
+        setData(await response.json());
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) return;
+    }
   }, [period, router]);
 
   useEffect(() => {
-    void refresh();
     const interval = window.setInterval(refresh, 60_000);
-    return () => window.clearInterval(interval);
+    return () => {
+      window.clearInterval(interval);
+      refreshRequest.current?.abort();
+    };
   }, [refresh]);
+  useEffect(() => {
+    void refresh();
+  }, [refresh, start]);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -161,8 +174,8 @@ export function TVMultiCarousel({ slots }: { slots: Slots }) {
   };
 
   return (
-    <main className="min-h-screen bg-[#eef7ef] p-5 text-[#073b36] lg:p-8">
-      <div className="mx-auto flex h-[calc(100vh-2.5rem)] max-w-[1920px] flex-col gap-5">
+    <main className="tv-shell bg-[#eef7ef] text-[#073b36]">
+      <div className="tv-frame mx-auto flex max-w-[1920px] flex-col gap-3 lg:gap-5">
         <header className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <span className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white">

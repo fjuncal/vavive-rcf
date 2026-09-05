@@ -18,8 +18,8 @@ export default function TVModePage() {
       .catch(() => setRole(null));
   }, []);
   return (
-    <main className="min-h-screen bg-[#eef7ef] p-6 text-[#003b71] lg:p-10">
-      <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-6xl flex-col justify-center">
+    <main className="min-h-[100dvh] bg-[#eef7ef] p-4 text-[#003b71] lg:p-8">
+      <div className="mx-auto flex min-h-[calc(100dvh-4rem)] max-w-6xl flex-col justify-center">
         {role && role !== "TV" && (
           <div className="mb-6 flex justify-end">
             <Link
