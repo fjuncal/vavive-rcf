@@ -42,6 +42,18 @@ BLOB_READ_WRITE_TOKEN="vercel_blob_rw_seu_token"
 
 O token nunca é enviado ao navegador: ele é usado somente no handler de upload do servidor. Os formatos aceitos continuam sendo JPG, PNG e WebP, com limite de 5 MB. Em produção, não use o filesystem da Vercel para uploads, pois ele não é persistente.
 
+## Database migrations
+
+Em desenvolvimento, altere o schema e crie uma nova migration:
+
+```bash
+npx prisma migrate dev --name nome_da_migration
+```
+
+Em produção, configure o Build Command da Vercel como `npm run vercel-build`. Ele executa `prisma generate`, aplica somente migrations pendentes com `prisma migrate deploy` e, por fim, executa o build do Next.js. Para aplicar somente migrations em um ambiente autorizado, use `npx prisma migrate deploy`.
+
+Migrations já aplicadas em produção são histórico imutável: não as edite, renomeie ou remova. `npm run db:seed` usa dados de desenvolvimento e nunca deve ser executado em produção.
+
 ## Validação
 
 ```bash
