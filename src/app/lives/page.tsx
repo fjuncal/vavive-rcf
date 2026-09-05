@@ -1,6 +1,7 @@
 import { requireAnyRole, OPERATIONS_ROLES } from "@/services/auth";
 import {
   getLiveFormOptions,
+  getNextScheduledLive,
   getLivesSummary,
   listLives,
 } from "@/services/lives";
@@ -20,16 +21,13 @@ export default async function LivesPage({
 }) {
   await requireAnyRole(OPERATIONS_ROLES);
   const filters = await searchParams;
-  const [lives, allLives, options, summary] = await Promise.all([
+  const [lives, nextLive, options, summary] = await Promise.all([
     listLives(filters),
-    listLives(),
+    getNextScheduledLive(),
     getLiveFormOptions(),
     getLivesSummary(filters),
   ]);
   const now = new Date();
-  const future = allLives
-    .filter((live) => live.scheduledAt > now)
-    .sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime())[0];
   return (
     <LivesList
       lives={lives.map((live) => ({
@@ -47,10 +45,10 @@ export default async function LivesPage({
       filters={filters}
       summary={{
         ...summary,
-        next: future
+        next: nextLive
           ? {
-              title: future.title,
-              scheduledAt: future.scheduledAt.toISOString(),
+              title: nextLive.title,
+              scheduledAt: nextLive.scheduledAt.toISOString(),
             }
           : null,
       }}

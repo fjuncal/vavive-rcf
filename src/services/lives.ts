@@ -167,21 +167,28 @@ export async function listLives(filters: LiveFilters = {}) {
 }
 
 export async function getLivesSummary(filters: LiveFilters = {}) {
-  const lives = await prisma.live.findMany({
-    where: livesWhere(filters),
-    select: {
-      participants: { select: { franchiseeId: true, attended: true } },
-    },
-  });
-  const attendees = lives.flatMap((live) =>
-    live.participants.filter((participant) => participant.attended),
-  );
+  const where = livesWhere(filters);
+  const [count, attendees] = await Promise.all([
+    prisma.live.count({ where }),
+    prisma.liveParticipant.findMany({
+      where: { attended: true, live: { is: where } },
+      select: { franchiseeId: true },
+    }),
+  ]);
   return {
-    count: lives.length,
+    count,
     participations: attendees.length,
     uniqueParticipants: new Set(attendees.map((item) => item.franchiseeId))
       .size,
   };
+}
+
+export function getNextScheduledLive() {
+  return prisma.live.findFirst({
+    where: { scheduledAt: { gt: new Date() } },
+    orderBy: { scheduledAt: "asc" },
+    select: { title: true, scheduledAt: true },
+  });
 }
 
 export async function getLiveFormOptions() {

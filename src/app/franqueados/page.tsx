@@ -28,7 +28,19 @@ async function getFranchiseesPage(query: string, requestedPage: number) {
       orderBy: { name: "asc" },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
-      include: { contacts: { orderBy: { contactedAt: "desc" }, take: 1 } },
+      select: {
+        id: true,
+        name: true,
+        unitName: true,
+        photoUrl: true,
+        moment: true,
+        active: true,
+        contacts: {
+          orderBy: { contactedAt: "desc" },
+          take: 1,
+          select: { contactedAt: true },
+        },
+      },
     });
 
     return {

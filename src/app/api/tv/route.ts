@@ -61,34 +61,36 @@ export async function GET(request: NextRequest) {
     },
   });
   const ids = franchisees.map((item) => item.id);
-  const [periodContacts, latestContacts, participations] = await Promise.all([
-    prisma.contact.findMany({
-      where: {
-        franchiseeId: { in: ids },
-        contactedAt: range,
-      },
-      select: { franchiseeId: true, type: true },
-    }),
-    prisma.contact.groupBy({
-      by: ["franchiseeId"],
-      where: { franchiseeId: { in: ids } },
-      _max: { contactedAt: true },
-    }),
-    prisma.liveParticipant.findMany({
-      where: {
-        franchiseeId: { in: ids },
-        live: { scheduledAt: range },
-      },
-      select: { franchiseeId: true, attended: true },
-    }),
-  ]);
-
-  const contactsByFranchisee = new Map<string, typeof periodContacts>();
-  for (const contact of periodContacts)
-    contactsByFranchisee.set(contact.franchiseeId, [
-      ...(contactsByFranchisee.get(contact.franchiseeId) ?? []),
-      contact,
+  const [periodContactGroups, latestContacts, participations] =
+    await Promise.all([
+      prisma.contact.groupBy({
+        by: ["franchiseeId", "type"],
+        where: {
+          franchiseeId: { in: ids },
+          contactedAt: range,
+        },
+        _count: { _all: true },
+      }),
+      prisma.contact.groupBy({
+        by: ["franchiseeId"],
+        where: { franchiseeId: { in: ids } },
+        _max: { contactedAt: true },
+      }),
+      prisma.liveParticipant.findMany({
+        where: {
+          franchiseeId: { in: ids },
+          live: { scheduledAt: range },
+        },
+        select: { franchiseeId: true, attended: true },
+      }),
     ]);
+
+  const contactsByFranchisee = new Map<string, Map<string, number>>();
+  for (const group of periodContactGroups) {
+    const counts = contactsByFranchisee.get(group.franchiseeId) ?? new Map();
+    counts.set(group.type, group._count._all);
+    contactsByFranchisee.set(group.franchiseeId, counts);
+  }
 
   const participationByFranchisee = new Map<
     string,
@@ -107,20 +109,25 @@ export async function GET(request: NextRequest) {
   const lastContactByFranchisee = new Map(
     latestContacts.map((item) => [item.franchiseeId, item._max.contactedAt]),
   );
-  const qualified = periodContacts.filter((contact) =>
-    QUALIFIED_CONTACT_TYPES.includes(contact.type),
-  );
+  const qualified = periodContactGroups
+    .filter((group) => QUALIFIED_CONTACT_TYPES.includes(group.type))
+    .reduce((total, group) => total + group._count._all, 0);
   const countType = (type: string) =>
-    periodContacts.filter((contact) => contact.type === type).length;
+    periodContactGroups
+      .filter((group) => group.type === type)
+      .reduce((total, group) => total + group._count._all, 0);
+  const contactedFranchisees = new Set(
+    periodContactGroups
+      .filter((group) => QUALIFIED_CONTACT_TYPES.includes(group.type))
+      .map((group) => group.franchiseeId),
+  ).size;
 
   return NextResponse.json({
     period,
     periodLabel: periodLabels[period],
     currentMonth: {
-      qualifiedContacts: qualified.length,
-      contactedFranchisees: new Set(
-        qualified.map((contact) => contact.franchiseeId),
-      ).size,
+      qualifiedContacts: qualified,
+      contactedFranchisees,
       totalFranchisees: franchisees.length,
       byType: [
         { name: "Telefone", value: countType("TELEFONE") },
@@ -128,10 +135,10 @@ export async function GET(request: NextRequest) {
         { name: "Presencial", value: countType("PRESENCIAL") },
         { name: "Live", value: countType("LIVE") },
       ],
-      totalQualified: qualified.length,
+      totalQualified: qualified,
     },
     franchisees: franchisees.map((franchisee) => {
-      const contacts = contactsByFranchisee.get(franchisee.id) ?? [];
+      const counts = contactsByFranchisee.get(franchisee.id) ?? new Map();
       const liveStats = participationByFranchisee.get(franchisee.id) ?? {
         invited: 0,
         attended: 0,
@@ -140,8 +147,7 @@ export async function GET(request: NextRequest) {
       const daysWithoutContact = latest
         ? Math.max(0, Math.ceil((Date.now() - latest.getTime()) / 86_400_000))
         : null;
-      const count = (type: string) =>
-        contacts.filter((contact) => contact.type === type).length;
+      const count = (type: string) => counts.get(type) ?? 0;
       return {
         id: franchisee.id,
         name: franchisee.name,

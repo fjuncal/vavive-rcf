@@ -1,14 +1,17 @@
 import { Activity, Building2, PhoneCall, Users } from "lucide-react";
+import type { ContactType } from "@prisma/client";
 import { MonthlyChart } from "@/components/dashboard/monthly-chart";
 import { WeeklyChart } from "@/components/dashboard/weekly-chart";
 import { PeriodFilter } from "@/components/dashboard/period-filter";
 import { FranchiseeCommunicationTable } from "@/components/dashboard/franchisee-communication-table";
 import { prisma } from "@/lib/db";
+import { measureServerOperation } from "@/lib/performance";
 
 function parse(value?: string) {
   const date = value ? new Date(`${value}T00:00:00`) : null;
   return date && !Number.isNaN(date.getTime()) ? date : null;
 }
+
 function iso(date: Date) {
   return date.toISOString().slice(0, 10);
 }
@@ -26,68 +29,98 @@ export default async function DashboardPage({
   const end = new Date(endDay);
   end.setHours(23, 59, 59, 999);
   const where = { contactedAt: { gte: start, lte: end } };
-  const [contacts, active] = await Promise.all([
-    prisma.contact.findMany({
-      where,
-      orderBy: { contactedAt: "desc" },
-      select: {
-        type: true,
-        contactedAt: true,
-        franchisee: { select: { id: true, name: true, unitName: true } },
+
+  const [
+    channelCounts,
+    franchiseeCounts,
+    latestContacts,
+    contactedFranchisees,
+    trendContacts,
+    active,
+  ] = await measureServerOperation("dashboard.queries", () =>
+    Promise.all([
+      prisma.contact.groupBy({ by: ["type"], where, _count: { _all: true } }),
+      prisma.contact.groupBy({
+        by: ["franchiseeId", "type"],
+        where,
+        _count: { _all: true },
+      }),
+      prisma.contact.groupBy({
+        by: ["franchiseeId"],
+        where,
+        _max: { contactedAt: true },
+      }),
+      prisma.franchisee.findMany({
+        where: { contacts: { some: where } },
+        select: { id: true, name: true, unitName: true },
+      }),
+      prisma.contact.findMany({ where, select: { contactedAt: true } }),
+      prisma.franchisee.count({ where: { active: true } }),
+    ]),
+  );
+
+  const rowsByFranchisee = new Map(
+    contactedFranchisees.map((franchisee) => [
+      franchisee.id,
+      {
+        ...franchisee,
+        whatsapp: 0,
+        telefone: 0,
+        video: 0,
+        presencial: 0,
+        live: 0,
+        total: 0,
+        last: new Date(0),
       },
-    }),
-    prisma.franchisee.count({ where: { active: true } }),
-  ]);
-  const map = new Map<
-    string,
-    {
-      id: string;
-      name: string;
-      unitName: string;
-      whatsapp: number;
-      telefone: number;
-      video: number;
-      presencial: number;
-      live: number;
-      total: number;
-      last: Date;
-    }
-  >();
-  for (const contact of contacts) {
-    const item = map.get(contact.franchisee.id) || {
-      ...contact.franchisee,
-      whatsapp: 0,
-      telefone: 0,
-      video: 0,
-      presencial: 0,
-      live: 0,
-      total: 0,
-      last: contact.contactedAt,
-    };
-    if (contact.type === "WHATSAPP") item.whatsapp++;
-    if (contact.type === "TELEFONE") item.telefone++;
-    if (contact.type === "VIDEO_CHAMADA") item.video++;
-    if (contact.type === "PRESENCIAL") item.presencial++;
-    if (contact.type === "LIVE") item.live++;
-    item.total++;
-    if (contact.contactedAt > item.last) item.last = contact.contactedAt;
-    map.set(contact.franchisee.id, item);
+    ]),
+  );
+  for (const group of franchiseeCounts) {
+    const row = rowsByFranchisee.get(group.franchiseeId);
+    if (!row) continue;
+    const count = group._count._all;
+    if (group.type === "WHATSAPP") row.whatsapp += count;
+    if (group.type === "TELEFONE") row.telefone += count;
+    if (group.type === "VIDEO_CHAMADA") row.video += count;
+    if (group.type === "PRESENCIAL") row.presencial += count;
+    if (group.type === "LIVE") row.live += count;
+    row.total += count;
   }
-  const rows = [...map.values()]
+  for (const latest of latestContacts) {
+    const row = rowsByFranchisee.get(latest.franchiseeId);
+    if (row && latest._max.contactedAt) row.last = latest._max.contactedAt;
+  }
+  const rows = [...rowsByFranchisee.values()]
     .sort((a, b) => b.total - a.total)
-    .map((item) => ({ ...item, last: item.last.toLocaleDateString("pt-BR") }));
-  const count = (type: string) =>
-    contacts.filter((contact) => contact.type === type).length;
-  const qualified = contacts.filter(
-    (contact) => contact.type !== "WHATSAPP",
-  ).length;
+    .map((row) => ({ ...row, last: row.last.toLocaleDateString("pt-BR") }));
+
+  const channelCount = new Map(
+    channelCounts.map((group) => [group.type, group._count._all]),
+  );
+  const contactsCount = channelCounts.reduce(
+    (total, group) => total + group._count._all,
+    0,
+  );
+  const qualified = channelCounts
+    .filter((group) => group.type !== "WHATSAPP")
+    .reduce((total, group) => total + group._count._all, 0);
   const channels = [
     ["WhatsApp", "WHATSAPP"],
     ["Telefone", "TELEFONE"],
     ["Vídeo", "VIDEO_CHAMADA"],
     ["Presencial", "PRESENCIAL"],
     ["Live", "LIVE"],
-  ].map(([name, type]) => ({ name, value: count(type) }));
+  ].map(([name, type]) => ({
+    name,
+    value: channelCount.get(type as ContactType) ?? 0,
+  }));
+
+  const contactDays = new Map<string, number>();
+  for (const contact of trendContacts) {
+    const day = contact.contactedAt.toLocaleDateString("sv-SE", {
+      timeZone: "America/Sao_Paulo",
+    });
+    contactDays.set(day, (contactDays.get(day) ?? 0) + 1);
+  }
   const days = Math.max(
     1,
     Math.ceil((end.getTime() - start.getTime()) / 86_400_000) + 1,
@@ -95,22 +128,25 @@ export default async function DashboardPage({
   const trend = Array.from({ length: days }, (_, index) => {
     const day = new Date(start);
     day.setDate(day.getDate() + index);
+    const key = day.toLocaleDateString("sv-SE", {
+      timeZone: "America/Sao_Paulo",
+    });
     return {
       name: new Intl.DateTimeFormat("pt-BR", {
         day: "2-digit",
         month: "2-digit",
+        timeZone: "America/Sao_Paulo",
       }).format(day),
-      value: contacts.filter(
-        (contact) => contact.contactedAt.toDateString() === day.toDateString(),
-      ).length,
+      value: contactDays.get(key) ?? 0,
     };
   });
   const cards = [
     { label: "Franqueados ativos", value: active, icon: Building2 },
-    { label: "Contatos no período", value: contacts.length, icon: Activity },
+    { label: "Contatos no período", value: contactsCount, icon: Activity },
     { label: "Contatos qualificados", value: qualified, icon: PhoneCall },
     { label: "Franqueados contatados", value: rows.length, icon: Users },
   ];
+
   return (
     <div className="space-y-6">
       <div>
