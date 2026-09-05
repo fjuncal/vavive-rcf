@@ -115,7 +115,14 @@ export function TVListMode() {
       const created = await r.json();
       setList((all) =>
         all.map((x) =>
-          x.id === item.id ? { ...x, [key(type)]: x[key(type)] + 1 } : x,
+          x.id === item.id
+            ? {
+                ...x,
+                [key(type)]: x[key(type)] + 1,
+                attention: created.attentionStatus,
+                daysWithoutContact: created.daysWithoutContact,
+              }
+            : x,
         ),
       );
       setDone(item.id);

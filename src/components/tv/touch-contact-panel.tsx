@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { MessageCircle, Phone, Radio, Users, Video } from "lucide-react";
+import type { ContactAttention } from "@/lib/contact-attention";
 export type TVFranchisee = {
   id: string;
   name: string;
@@ -48,7 +49,11 @@ export function QuickContactButtons({
   dense = false,
 }: {
   franchisee: TVFranchisee;
-  onSaved: (id: string, type: ContactChannel) => void;
+  onSaved: (
+    id: string,
+    type: ContactChannel,
+    status: { attention: ContactAttention; daysWithoutContact: number },
+  ) => void | Promise<void>;
   onUndone?: () => void;
   compact?: boolean;
   dense?: boolean;
@@ -97,7 +102,10 @@ export function QuickContactButtons({
           ...current,
         ].slice(0, 5),
       );
-      onSaved(franchisee.id, type);
+      await onSaved(franchisee.id, type, {
+        attention: item.attentionStatus,
+        daysWithoutContact: item.daysWithoutContact,
+      });
       setUndo({
         id: item.id,
         type: item.type,

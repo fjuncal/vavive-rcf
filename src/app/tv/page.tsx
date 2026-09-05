@@ -291,7 +291,11 @@ export default function TVPage() {
     }
   };
   const registerInstantly = useCallback(
-    (franchiseeId: string, type: ContactChannel) => {
+    (
+      franchiseeId: string,
+      type: ContactChannel,
+      status: { attention: ContactAttention; daysWithoutContact: number },
+    ) => {
       setData((previous) => {
         const target = previous.franchisees.find(
           (item) => item.id === franchiseeId,
@@ -330,6 +334,8 @@ export default function TVPage() {
               ? {
                   ...item,
                   [key]: item[key] + 1,
+                  attention: status.attention,
+                  daysWithoutContact: status.daysWithoutContact,
                   lastContact: new Date().toLocaleDateString("pt-BR", {
                     day: "2-digit",
                     month: "2-digit",
@@ -339,6 +345,19 @@ export default function TVPage() {
           ),
         };
       });
+      setCurrentData((current) =>
+        current?.id === franchiseeId
+          ? {
+              ...current,
+              attention: status.attention,
+              daysWithoutContact: status.daysWithoutContact,
+              lastContact: new Date().toLocaleDateString("pt-BR", {
+                day: "2-digit",
+                month: "2-digit",
+              }),
+            }
+          : current,
+      );
       void Promise.all([refresh(), refreshCurrent(franchiseeId)]);
     },
     [refresh, refreshCurrent],

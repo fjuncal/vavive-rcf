@@ -101,7 +101,8 @@ export function TVMultiCarousel({ slots }: { slots: Slots }) {
       if (response.ok && !controller.signal.aborted)
         setData(await response.json());
     } catch (error) {
-      if (!(error instanceof DOMException && error.name === "AbortError")) return;
+      if (!(error instanceof DOMException && error.name === "AbortError"))
+        return;
     }
   }, [period, router]);
 
@@ -152,12 +153,23 @@ export function TVMultiCarousel({ slots }: { slots: Slots }) {
   };
 
   const registerInstantly = useCallback(
-    (franchiseeId: string, type: ContactChannel) => {
+    (
+      franchiseeId: string,
+      type: ContactChannel,
+      status: { attention: ContactAttention; daysWithoutContact: number },
+    ) => {
       const key = contactKey(type);
       setData((previous) => ({
         ...previous,
         franchisees: previous.franchisees.map((item) =>
-          item.id === franchiseeId ? { ...item, [key]: item[key] + 1 } : item,
+          item.id === franchiseeId
+            ? {
+                ...item,
+                [key]: item[key] + 1,
+                attention: status.attention,
+                daysWithoutContact: status.daysWithoutContact,
+              }
+            : item,
         ),
       }));
       void refresh();
@@ -299,7 +311,11 @@ function FranchiseeCard({
 }: {
   franchisee: Franchisee;
   compact: boolean;
-  onSaved: (id: string, type: ContactChannel) => void;
+  onSaved: (
+    id: string,
+    type: ContactChannel,
+    status: { attention: ContactAttention; daysWithoutContact: number },
+  ) => void;
   onUndone: () => void;
 }) {
   const attention = CONTACT_ATTENTION_CONFIG[franchisee.attention];

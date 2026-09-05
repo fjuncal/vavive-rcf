@@ -7,6 +7,7 @@ import {
   requireAnyRole,
   TV_ACCESS_ROLES,
 } from "@/services/auth";
+import { getContactAttention } from "@/lib/contact-attention";
 const schema = z.object({
   franchiseeId: z.string().min(1),
   type: z.enum(["WHATSAPP", "TELEFONE", "VIDEO_CHAMADA", "PRESENCIAL", "LIVE"]),
@@ -40,7 +41,14 @@ export async function POST(request: Request) {
         franchisee: { select: { name: true, unitName: true } },
       },
     });
-    return NextResponse.json(contact, { status: 201 });
+    return NextResponse.json(
+      {
+        ...contact,
+        attentionStatus: getContactAttention(0),
+        daysWithoutContact: 0,
+      },
+      { status: 201 },
+    );
   } catch (error) {
     return NextResponse.json(
       {
