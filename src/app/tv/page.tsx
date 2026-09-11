@@ -71,13 +71,6 @@ const metrics = [
   { key: "presencial", label: "Presencial" },
   { key: "live", label: "Contatos Live" },
 ] as const;
-const carouselSurfaceByAttention: Record<ContactAttention, string> = {
-  em_dia: "bg-gradient-to-br from-[#003b71] via-[#07547b] to-[#0b8f45]",
-  atencao: "bg-gradient-to-br from-[#073b5b] via-[#8a5600] to-[#c68100]",
-  critico: "bg-gradient-to-br from-[#48152a] via-[#9f1e31] to-[#dc3f32]",
-  urgente:
-    "bg-gradient-to-br from-[#3d0a1e] via-[#8f102f] to-[#e23b38] animate-pulse",
-};
 type RecentContact = {
   id: string;
   type: "WHATSAPP" | "TELEFONE" | "VIDEO_CHAMADA" | "PRESENCIAL" | "LIVE";
@@ -444,7 +437,7 @@ export default function TVPage() {
         <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[minmax(0,1fr)_350px]">
           {current ? (
             <section
-              className={`relative min-h-0 overflow-hidden rounded-[32px] shadow-2xl ${carouselSurfaceByAttention[current.attention]} ${currentAttention.carouselClass}`}
+              className={`relative min-h-0 overflow-hidden rounded-[32px] shadow-2xl ${currentAttention.surfaceClass} ${currentAttention.carouselClass}`}
             >
               {current.attention === "urgente" && (
                 <div className="pointer-events-none absolute inset-x-0 top-0 h-2 bg-[#facc15] shadow-[0_0_24px_rgba(250,204,21,0.95)]" />

@@ -321,7 +321,7 @@ function FranchiseeCard({
   const attention = CONTACT_ATTENTION_CONFIG[franchisee.attention];
   return (
     <article
-      className={`flex min-h-0 flex-col overflow-hidden rounded-[28px] border-2 bg-gradient-to-br from-[#003b71] via-[#07547b] to-[#0b8f45] text-white shadow-xl ${compact ? "p-3" : "p-6"} ${attention.carouselClass} ${franchisee.attention === "urgente" ? "animate-pulse" : ""}`}
+      className={`flex min-h-0 flex-col overflow-hidden rounded-[28px] border-2 text-white shadow-xl ${compact ? "p-3" : "p-6"} ${attention.surfaceClass} ${attention.carouselClass}`}
     >
       <div className="flex items-start justify-between gap-3">
         <span
