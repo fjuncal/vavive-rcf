@@ -67,6 +67,11 @@ model Franchisee {
   // existentes ficam NULL até o SUPERADMIN preencher.
   joinedNetworkAt DateTime? @db.Date @map("joined_network_at")
   inauguratedAt   DateTime? @db.Date @map("inaugurated_at")
+  // Quantidade MANUAL de atendimentos da UNIDADE (número inteiro >= 0).
+  // Opcional, informado manualmente pelo SUPERADMIN. NULL = ainda não
+  // informado. NÃO é contagem automática (não deriva de Contact, ajustes
+  // ou Lives) e 0 é um valor válido (diferente de NULL).
+  serviceCount  Int?      @map("service_count")
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
 

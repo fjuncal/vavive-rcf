@@ -22,10 +22,32 @@ const civilDateField = z
   .optional()
   .or(z.literal(""));
 
+// Quantidade MANUAL de atendimentos da unidade (inteiro 0..1000000).
+// "" / null / ausente = limpar (null). 0 é válido e permanece 0.
+// Somente SUPERADMIN pode enviá-lo (validado no handler, não só no front).
+// Validação estrita: não aceita decimais, negativos nem lixo como "12abc".
+const serviceCountField = z
+  .union([z.number(), z.string(), z.null()])
+  .optional()
+  .refine(
+    (value) => {
+      if (value === undefined || value === null) return true;
+      if (typeof value === "number")
+        return Number.isInteger(value) && value >= 0 && value <= 1000000;
+      const trimmed = value.trim();
+      return (
+        trimmed === "" ||
+        (/^\d+$/.test(trimmed) && Number(trimmed) <= 1000000)
+      );
+    },
+    { message: "Atendimentos deve ser um número inteiro entre 0 e 1000000." },
+  );
+
 const schemaWithDates = schema
   .extend({
     joinedNetworkAt: civilDateField,
     inauguratedAt: civilDateField,
+    serviceCount: serviceCountField,
   })
   .superRefine((value, context) => {
     if (
@@ -48,6 +70,13 @@ function datesForbiddenMessage() {
   );
 }
 
+function serviceCountForbiddenMessage() {
+  return NextResponse.json(
+    { message: "Somente SUPERADMIN pode alterar os atendimentos da unidade." },
+    { status: 403 },
+  );
+}
+
 function hasDateKeys(body: unknown) {
   return (
     typeof body === "object" &&
@@ -56,8 +85,23 @@ function hasDateKeys(body: unknown) {
   );
 }
 
+function hasServiceCountKey(body: unknown) {
+  return (
+    typeof body === "object" && body !== null && "serviceCount" in body
+  );
+}
+
 function toNullableDate(value: string | undefined): Date | null {
   return value ? civilDateToUTCDate(value) : null;
+}
+
+function toNullableCount(
+  value: number | string | null | undefined,
+): number | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value === "number") return value;
+  const trimmed = value.trim();
+  return trimmed === "" ? null : Number(trimmed);
 }
 
 export async function POST(request: Request) {
@@ -67,6 +111,8 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     if (!isSuperAdmin && hasDateKeys(body)) return datesForbiddenMessage();
+    if (!isSuperAdmin && hasServiceCountKey(body))
+      return serviceCountForbiddenMessage();
     const payload = (isSuperAdmin ? schemaWithDates : schema).parse(body);
 
     // Unidade nova já nasce com sua pessoa principal (transição compatível:
@@ -86,6 +132,13 @@ export async function POST(request: Request) {
                 ),
                 inauguratedAt: toNullableDate(
                   (payload as { inauguratedAt?: string }).inauguratedAt,
+                ),
+                serviceCount: toNullableCount(
+                  (
+                    payload as {
+                      serviceCount?: number | string | null;
+                    }
+                  ).serviceCount,
                 ),
               }
             : {}),
@@ -125,6 +178,8 @@ export async function PUT(request: Request) {
     const body = await request.json();
     const id = String(body.id || "");
     if (!isSuperAdmin && hasDateKeys(body)) return datesForbiddenMessage();
+    if (!isSuperAdmin && hasServiceCountKey(body))
+      return serviceCountForbiddenMessage();
     const payload = (isSuperAdmin ? schemaWithDates : schema).parse(body);
     const franchisee = await prisma.franchisee.update({
       where: { id },
@@ -141,6 +196,9 @@ export async function PUT(request: Request) {
               ),
               inauguratedAt: toNullableDate(
                 (payload as z.infer<typeof schemaWithDates>).inauguratedAt,
+              ),
+              serviceCount: toNullableCount(
+                (payload as z.infer<typeof schemaWithDates>).serviceCount,
               ),
             }
           : {}),

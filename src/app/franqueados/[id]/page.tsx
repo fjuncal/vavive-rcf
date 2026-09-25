@@ -41,6 +41,7 @@ export default async function FranchiseeDetailPage({
           active: true,
           joinedNetworkAt: true,
           inauguratedAt: true,
+          serviceCount: true,
         },
       }),
     prisma.contact.count({ where: { franchiseeId: id } }),
@@ -188,6 +189,12 @@ export default async function FranchiseeDetailPage({
                 </b>
               </span>
             </div>
+            <p className="mt-1 text-sm text-slate-600">
+              Atendimentos:{" "}
+              <b className="text-slate-900">
+                {franchisee.serviceCount ?? "Não informado"}
+              </b>
+            </p>
           </div>
         </div>
       </div>
