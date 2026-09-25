@@ -10,6 +10,7 @@ import { ContactType, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/services/auth";
 import { AuditActions } from "@/components/contacts/audit-actions";
+import { EditContactDialog } from "@/components/contacts/edit-contact-dialog";
 
 const PAGE_SIZE = 25;
 const labels: Record<string, string> = {
@@ -95,6 +96,22 @@ export default async function ContactsPage({
       user: { select: { name: true } },
     },
   });
+  // Membros das unidades visíveis na página: insumo do EditContactDialog
+  // (mesmo dialog do detalhe do franqueado, sem segunda implementação).
+  const franchiseeIds = [...new Set(contacts.map((contact) => contact.franchisee.id))];
+  const pageMembers = franchiseeIds.length
+    ? await prisma.franchiseeMember.findMany({
+        where: { franchiseeId: { in: franchiseeIds } },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, franchiseeId: true },
+      })
+    : [];
+  const membersByFranchisee = new Map<string, Array<{ id: string; name: string }>>();
+  for (const member of pageMembers) {
+    const list = membersByFranchisee.get(member.franchiseeId) ?? [];
+    list.push({ id: member.id, name: member.name });
+    membersByFranchisee.set(member.franchiseeId, list);
+  }
   return (
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
@@ -217,10 +234,24 @@ export default async function ContactsPage({
                   </td>
                   {user.role === "SUPERADMIN" && (
                     <td className="px-5 py-4 text-right">
-                      <AuditActions
-                        id={contact.id}
-                        subject={`${contact.franchisee.name} — ${labels[contact.type]}`}
-                      />
+                      <div className="flex items-center justify-end gap-2">
+                        <EditContactDialog
+                          contact={{
+                            id: contact.id,
+                            type: contact.type,
+                            contactedAt: contact.contactedAt.toISOString(),
+                            notes: contact.notes,
+                            memberId: contact.memberId,
+                          }}
+                          members={
+                            membersByFranchisee.get(contact.franchisee.id) ?? []
+                          }
+                        />
+                        <AuditActions
+                          id={contact.id}
+                          subject={`${contact.franchisee.name} — ${labels[contact.type]}`}
+                        />
+                      </div>
                     </td>
                   )}
                 </tr>
