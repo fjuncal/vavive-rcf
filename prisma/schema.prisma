@@ -67,11 +67,6 @@ model Franchisee {
   // existentes ficam NULL até o SUPERADMIN preencher.
   joinedNetworkAt DateTime? @db.Date @map("joined_network_at")
   inauguratedAt   DateTime? @db.Date @map("inaugurated_at")
-  // Quantidade MANUAL de atendimentos da UNIDADE (número inteiro >= 0).
-  // Opcional, informado manualmente pelo SUPERADMIN. NULL = ainda não
-  // informado. NÃO é contagem automática (não deriva de Contact, ajustes
-  // ou Lives) e 0 é um valor válido (diferente de NULL).
-  serviceCount  Int?      @map("service_count")
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
 
@@ -79,8 +74,31 @@ model Franchisee {
   liveParticipations LiveParticipant[]
   interactionAdjustments InteractionAdjustment[]
   members            FranchiseeMember[]
+  monthlyServiceCounts FranchiseeMonthlyServiceCount[]
 
   @@map("franchisees")
+}
+
+// ATENDIMENTOS MENSAIS DA UNIDADE: quantidade MANUAL por franquia/mês.
+// 1 linha = 1 competência (franchiseeId + year + month únicos). year/month
+// são INTEGER (sem timezone). Linha ausente = mês sem dado; 0 é válido.
+// NÃO deriva de Contact/ajustes/Lives e nunca altera essas métricas.
+// Exclusão da unidade remove o histórico (Cascade, como Contact e membros).
+// Faixas (month 1–12, year 2000–2100, count >= 0) validadas no backend e
+// reforçadas por CHECK constraints na migration.
+model FranchiseeMonthlyServiceCount {
+  id           String     @id @default(cuid())
+  franchiseeId String
+  franchisee   Franchisee @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
+  year         Int
+  month        Int
+  count        Int
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([franchiseeId, year, month])
+  @@index([year, month])
+  @@map("franchisee_monthly_service_counts")
 }
 
 // PESSOA / FRANQUEADO: uma unidade (Franchisee) pode ter várias pessoas.

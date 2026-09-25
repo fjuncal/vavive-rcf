@@ -3,6 +3,7 @@ import { z } from "zod";
 import { OPERATIONS_ROLES, requireAnyRole } from "@/services/auth";
 import { prisma } from "@/lib/db";
 import { civilDateToUTCDate, isValidCivilDate } from "@/lib/utils";
+import { monthlyServiceCountInputSchema } from "@/services/monthly-service-counts";
 
 const schema = z.object({
   name: z.string().min(2),
@@ -22,32 +23,16 @@ const civilDateField = z
   .optional()
   .or(z.literal(""));
 
-// Quantidade MANUAL de atendimentos da unidade (inteiro 0..1000000).
-// "" / null / ausente = limpar (null). 0 é válido e permanece 0.
-// Somente SUPERADMIN pode enviá-lo (validado no handler, não só no front).
-// Validação estrita: não aceita decimais, negativos nem lixo como "12abc".
-const serviceCountField = z
-  .union([z.number(), z.string(), z.null()])
-  .optional()
-  .refine(
-    (value) => {
-      if (value === undefined || value === null) return true;
-      if (typeof value === "number")
-        return Number.isInteger(value) && value >= 0 && value <= 1000000;
-      const trimmed = value.trim();
-      return (
-        trimmed === "" ||
-        (/^\d+$/.test(trimmed) && Number(trimmed) <= 1000000)
-      );
-    },
-    { message: "Atendimentos deve ser um número inteiro entre 0 e 1000000." },
-  );
+// Lançamento mensal opcional no cadastro (SUPERADMIN): cria a franquia e o
+// registro de atendimentos do mês/ano na MESMA transação (rollback conjunto).
+const initialMonthlySchema = z
+  .object({ monthlyServiceCount: monthlyServiceCountInputSchema })
+  .partial();
 
 const schemaWithDates = schema
   .extend({
     joinedNetworkAt: civilDateField,
     inauguratedAt: civilDateField,
-    serviceCount: serviceCountField,
   })
   .superRefine((value, context) => {
     if (
@@ -70,9 +55,12 @@ function datesForbiddenMessage() {
   );
 }
 
-function serviceCountForbiddenMessage() {
+function monthlyCountForbiddenMessage() {
   return NextResponse.json(
-    { message: "Somente SUPERADMIN pode alterar os atendimentos da unidade." },
+    {
+      message:
+        "Somente SUPERADMIN pode lançar atendimentos mensais da unidade.",
+    },
     { status: 403 },
   );
 }
@@ -85,23 +73,14 @@ function hasDateKeys(body: unknown) {
   );
 }
 
-function hasServiceCountKey(body: unknown) {
+function hasMonthlyCountKey(body: unknown) {
   return (
-    typeof body === "object" && body !== null && "serviceCount" in body
+    typeof body === "object" && body !== null && "monthlyServiceCount" in body
   );
 }
 
 function toNullableDate(value: string | undefined): Date | null {
   return value ? civilDateToUTCDate(value) : null;
-}
-
-function toNullableCount(
-  value: number | string | null | undefined,
-): number | null {
-  if (value === undefined || value === null) return null;
-  if (typeof value === "number") return value;
-  const trimmed = value.trim();
-  return trimmed === "" ? null : Number(trimmed);
 }
 
 export async function POST(request: Request) {
@@ -111,12 +90,17 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     if (!isSuperAdmin && hasDateKeys(body)) return datesForbiddenMessage();
-    if (!isSuperAdmin && hasServiceCountKey(body))
-      return serviceCountForbiddenMessage();
+    if (!isSuperAdmin && hasMonthlyCountKey(body))
+      return monthlyCountForbiddenMessage();
     const payload = (isSuperAdmin ? schemaWithDates : schema).parse(body);
+    const initialMonthly = isSuperAdmin
+      ? initialMonthlySchema.parse(body).monthlyServiceCount
+      : undefined;
 
     // Unidade nova já nasce com sua pessoa principal (transição compatível:
     // unidades antigas receberam a pessoa via backfill da migration).
+    // Lançamento mensal opcional sai na MESMA transação: se falhar, nada é
+    // criado pela metade. Nenhum Contact/Ajuste é criado aqui.
     const franchisee = await prisma.$transaction(async (tx) => {
       const created = await tx.franchisee.create({
         data: {
@@ -133,13 +117,6 @@ export async function POST(request: Request) {
                 inauguratedAt: toNullableDate(
                   (payload as { inauguratedAt?: string }).inauguratedAt,
                 ),
-                serviceCount: toNullableCount(
-                  (
-                    payload as {
-                      serviceCount?: number | string | null;
-                    }
-                  ).serviceCount,
-                ),
               }
             : {}),
         },
@@ -152,6 +129,16 @@ export async function POST(request: Request) {
           active: payload.active,
         },
       });
+      if (initialMonthly) {
+        await tx.franchiseeMonthlyServiceCount.create({
+          data: {
+            franchiseeId: created.id,
+            year: initialMonthly.year,
+            month: initialMonthly.month,
+            count: initialMonthly.count,
+          },
+        });
+      }
       return created;
     });
 
@@ -178,8 +165,8 @@ export async function PUT(request: Request) {
     const body = await request.json();
     const id = String(body.id || "");
     if (!isSuperAdmin && hasDateKeys(body)) return datesForbiddenMessage();
-    if (!isSuperAdmin && hasServiceCountKey(body))
-      return serviceCountForbiddenMessage();
+    if (!isSuperAdmin && hasMonthlyCountKey(body))
+      return monthlyCountForbiddenMessage();
     const payload = (isSuperAdmin ? schemaWithDates : schema).parse(body);
     const franchisee = await prisma.franchisee.update({
       where: { id },
@@ -196,9 +183,6 @@ export async function PUT(request: Request) {
               ),
               inauguratedAt: toNullableDate(
                 (payload as z.infer<typeof schemaWithDates>).inauguratedAt,
-              ),
-              serviceCount: toNullableCount(
-                (payload as z.infer<typeof schemaWithDates>).serviceCount,
               ),
             }
           : {}),

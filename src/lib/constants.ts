@@ -20,6 +20,25 @@ export const FRANCHISE_MOMENT_LABELS = {
   IMPLANTACAO: "Implantação",
   INAUGURADA: "Inaugurada",
 } as const;
+// Competência mensal (índice 0 = Janeiro). Só exibição: o banco guarda
+// year/month como INTEGER, sem timezone e sem strings localizadas.
+export const MONTH_LABELS = [
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
+] as const;
+export function formatMonthYear(month: number, year: number) {
+  return `${MONTH_LABELS[month - 1] ?? `Mês ${month}`}/${year}`;
+}
 export const TV_AUTOPLAY_SECONDS = 30;
 export const TV_REFRESH_SECONDS = 60;
 export const TV_ACCOUNT_EMAIL = "tv@vavive.local";

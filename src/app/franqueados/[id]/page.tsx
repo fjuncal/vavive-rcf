@@ -6,8 +6,10 @@ import { prisma } from "@/lib/db";
 import { FRANCHISE_MOMENT_LABELS, CONTACT_TYPE_LABELS } from "@/lib/constants";
 import { getSessionUser, hasAnyRole, OPERATIONS_ROLES } from "@/services/auth";
 import { getInteractionBreakdown } from "@/services/interaction-adjustments";
+import { getMonthlyServiceCounts } from "@/services/monthly-service-counts";
 import { InteractionAdjustmentsPanel } from "@/components/franchisees/interaction-adjustments-panel";
 import { FranchiseeMembersPanel } from "@/components/franchisees/franchisee-members-panel";
+import { MonthlyServiceCountsPanel } from "@/components/franchisees/monthly-service-counts-panel";
 import { EditContactDialog } from "@/components/contacts/edit-contact-dialog";
 
 const HISTORY_PAGE_SIZE = 25;
@@ -41,7 +43,6 @@ export default async function FranchiseeDetailPage({
           active: true,
           joinedNetworkAt: true,
           inauguratedAt: true,
-          serviceCount: true,
         },
       }),
     prisma.contact.count({ where: { franchiseeId: id } }),
@@ -58,7 +59,8 @@ export default async function FranchiseeDetailPage({
   // Total derivado: registros reais (Contact) + SUM(ajustes manuais).
   // Ajustes NÃO alteram último contato, status, nem freshness/attention.
   // Por canal: Contacts do tipo + ajustes do mesmo tipo (legados só no total).
-  const [breakdown, adjustments, members] = await Promise.all([
+  const [breakdown, adjustments, members, monthlyServiceCounts] =
+    await Promise.all([
     getInteractionBreakdown(id),
     isSuperAdmin
       ? prisma.interactionAdjustment.findMany({
@@ -87,6 +89,7 @@ export default async function FranchiseeDetailPage({
           },
         })
       : Promise.resolve([]),
+    canManageMembers ? getMonthlyServiceCounts(id) : Promise.resolve([]),
   ]);
 
   const pages = Math.max(1, Math.ceil(totalContacts / HISTORY_PAGE_SIZE));
@@ -189,12 +192,6 @@ export default async function FranchiseeDetailPage({
                 </b>
               </span>
             </div>
-            <p className="mt-1 text-sm text-slate-600">
-              Atendimentos:{" "}
-              <b className="text-slate-900">
-                {franchisee.serviceCount ?? "Não informado"}
-              </b>
-            </p>
           </div>
         </div>
       </div>
@@ -209,6 +206,17 @@ export default async function FranchiseeDetailPage({
           createdAt: item.createdAt.toISOString(),
         }))}
         canManage={canManageMembers}
+      />
+
+      <MonthlyServiceCountsPanel
+        franchiseeId={franchisee.id}
+        initialRecords={monthlyServiceCounts.map((item) => ({
+          id: item.id,
+          year: item.year,
+          month: item.month,
+          count: item.count,
+        }))}
+        isSuperAdmin={isSuperAdmin}
       />
 
       <div className="grid gap-4 md:grid-cols-6">
