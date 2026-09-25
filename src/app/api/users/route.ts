@@ -31,6 +31,16 @@ function message(error: unknown, fallback: string) {
     : fallback;
 }
 
+const safeUserSelect = {
+  id: true,
+  name: true,
+  email: true,
+  role: true,
+  active: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
 export async function GET() {
   await requireRole("SUPERADMIN");
   return NextResponse.json(
@@ -42,6 +52,7 @@ export async function GET() {
         role: true,
         active: true,
         createdAt: true,
+        updatedAt: true,
       },
       orderBy: { name: "asc" },
     }),
@@ -52,8 +63,17 @@ export async function POST(request: Request) {
   await requireRole("SUPERADMIN");
   try {
     const payload = createSchema.parse(await request.json());
+    const email = payload.email.trim().toLowerCase();
+    const passwordHash = await hashPassword(payload.password);
     const user = await prisma.user.create({
-      data: { ...payload, passwordHash: await hashPassword(payload.password) },
+      data: {
+        name: payload.name,
+        email,
+        passwordHash,
+        role: payload.role,
+        active: payload.active,
+      },
+      select: safeUserSelect,
     });
     return NextResponse.json(user, { status: 201 });
   } catch (error) {
@@ -73,17 +93,19 @@ export async function PUT(request: Request) {
   await requireRole("SUPERADMIN");
   try {
     const payload = updateSchema.parse(await request.json());
+    const email = payload.email.trim().toLowerCase();
     const user = await prisma.user.update({
       where: { id: payload.id },
       data: {
         name: payload.name,
-        email: payload.email,
+        email,
         role: payload.role,
         active: payload.active,
         ...(payload.password
           ? { passwordHash: await hashPassword(payload.password) }
           : {}),
       },
+      select: safeUserSelect,
     });
     return NextResponse.json(user);
   } catch (error) {
