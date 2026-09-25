@@ -122,12 +122,11 @@ async function main() {
 
     for (const franchisee of franchisees) {
       const attended = franchisee.attendedLives > index;
-      const existing = await prisma.liveParticipant.findUnique({
+      const existing = await prisma.liveParticipant.findFirst({
         where: {
-          liveId_franchiseeId: {
-            liveId: live.id,
-            franchiseeId: franchisee.id,
-          },
+          liveId: live.id,
+          franchiseeId: franchisee.id,
+          memberId: null,
         },
         select: { id: true, contactId: true },
       });

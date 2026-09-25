@@ -3,14 +3,38 @@
 import { useState } from "react";
 import { History, Plus } from "lucide-react";
 import { formatDateTime } from "@/lib/utils";
+import { CONTACT_TYPE_LABELS } from "@/lib/constants";
 
 // Mantido em sincronia com MAX_ADJUSTMENT_AMOUNT em
 // src/services/interaction-adjustments.ts (validação final no backend).
 const MAX_AMOUNT = 1000;
 
+type AdjustmentChannel =
+  | "WHATSAPP"
+  | "TELEFONE"
+  | "VIDEO_CHAMADA"
+  | "PRESENCIAL"
+  | "LIVE";
+
+const CHANNEL_OPTIONS: AdjustmentChannel[] = [
+  "WHATSAPP",
+  "TELEFONE",
+  "VIDEO_CHAMADA",
+  "PRESENCIAL",
+  "LIVE",
+];
+
+export const LEGACY_CHANNEL_LABEL = "Ajuste legado — sem canal";
+
+export function channelLabel(type: AdjustmentChannel | null): string {
+  if (!type) return LEGACY_CHANNEL_LABEL;
+  return CONTACT_TYPE_LABELS[type];
+}
+
 export type AdjustmentItem = {
   id: string;
   amount: number;
+  type: AdjustmentChannel | null;
   notes: string | null;
   createdAt: string;
   createdBy: { name: string };
@@ -40,6 +64,7 @@ export function InteractionAdjustmentsPanel({
   const [adjustments, setAdjustments] =
     useState<AdjustmentItem[]>(initialAdjustments);
   const [amount, setAmount] = useState("");
+  const [channel, setChannel] = useState<AdjustmentChannel>("TELEFONE");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{
@@ -59,7 +84,11 @@ export function InteractionAdjustmentsPanel({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ amount: parsedAmount, notes }),
+          body: JSON.stringify({
+            amount: parsedAmount,
+            type: channel,
+            notes,
+          }),
         },
       );
       const payload = await response.json().catch(() => ({}));
@@ -75,7 +104,7 @@ export function InteractionAdjustmentsPanel({
       setNotes("");
       setFeedback({
         type: "success",
-        text: `+${payload.adjustment.amount} interações adicionadas com sucesso.`,
+        text: `+${payload.adjustment.amount} interações de ${channelLabel(payload.adjustment.type)} adicionadas com sucesso.`,
       });
     } catch (error) {
       setFeedback({
@@ -131,7 +160,24 @@ export function InteractionAdjustmentsPanel({
           <p className="text-sm font-semibold text-slate-700">
             Adicionar interações manualmente
           </p>
-          <div className="grid gap-4 sm:grid-cols-[160px_1fr]">
+          <div className="grid gap-4 sm:grid-cols-[160px_180px_1fr]">
+            <label className="block text-sm font-medium text-slate-700">
+              Canal
+              <select
+                value={channel}
+                onChange={(event) =>
+                  setChannel(event.target.value as AdjustmentChannel)
+                }
+                required
+                className={`${inputClass} mt-2`}
+              >
+                {CHANNEL_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {CONTACT_TYPE_LABELS[option]}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="block text-sm font-medium text-slate-700">
               Quantidade
               <input
@@ -141,7 +187,7 @@ export function InteractionAdjustmentsPanel({
                 step={1}
                 value={amount}
                 onChange={(event) => setAmount(event.target.value)}
-                placeholder="Ex.: 3"
+                placeholder="Ex.: 4"
                 required
                 className={`${inputClass} mt-2`}
               />
@@ -166,7 +212,7 @@ export function InteractionAdjustmentsPanel({
             {saving
               ? "Adicionando..."
               : Number.isInteger(parsedAmount) && parsedAmount > 0
-                ? `Adicionar +${parsedAmount} interações`
+                ? `Adicionar +${parsedAmount} interações de ${CONTACT_TYPE_LABELS[channel]}`
                 : "Adicionar interações"}
           </button>
         </form>
@@ -186,10 +232,15 @@ export function InteractionAdjustmentsPanel({
                   className="rounded-xl border border-slate-200 bg-slate-50 p-4"
                 >
                   <div className="flex items-center justify-between gap-4">
-                    <span className="text-lg font-semibold text-[#0b8f45]">
-                      +{item.amount}
-                    </span>
-                    <span className="text-xs text-slate-500">
+                    <div>
+                      <p className="text-sm font-bold text-[var(--brand-secondary)]">
+                        {channelLabel(item.type)}
+                      </p>
+                      <p className="text-lg font-semibold text-[#0b8f45]">
+                        +{item.amount} interações
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-xs text-slate-500">
                       {formatDateTime(item.createdAt)}
                     </span>
                   </div>

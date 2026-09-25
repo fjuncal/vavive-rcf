@@ -17,6 +17,11 @@ import {
   CONTACT_ATTENTION_CONFIG,
   type ContactAttention,
 } from "@/lib/contact-attention";
+import {
+  UnitNames,
+  UnitPhotos,
+  type UnitMember,
+} from "@/components/tv/unit-members";
 type Channel =
   "WHATSAPP" | "TELEFONE" | "VIDEO_CHAMADA" | "PRESENCIAL" | "LIVE";
 type Franchisee = {
@@ -35,6 +40,8 @@ type Franchisee = {
   liveAttendanceRate: number;
   daysWithoutContact: number | null;
   attention: ContactAttention;
+  hasContact: boolean;
+  members: UnitMember[];
 };
 type TVPeriod =
   | "last_7_days"
@@ -156,7 +163,7 @@ export function TVListMode() {
     setUndo(null);
   }
   const visible = list.filter((item) =>
-    `${item.name} ${item.unitName}`
+    `${item.name} ${item.unitName} ${(item.members ?? []).map((member) => member.name).join(" ")}`
       .toLocaleLowerCase("pt-BR")
       .includes(query.toLocaleLowerCase("pt-BR")),
   );
@@ -243,18 +250,20 @@ export function TVListMode() {
                   onClick={() => setTarget(item)}
                   className={`group grid min-h-24 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 rounded-2xl border p-3.5 shadow-sm transition duration-200 hover:shadow-md ${attention.listClass} ${item.attention === "urgente" ? "animate-pulse" : ""}`}
                 >
-                  <img
-                    src={
-                      item.photoUrl ||
-                      "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=160&q=80"
-                    }
-                    alt=""
-                    className="h-18 w-18 rounded-xl border-2 border-[#eef7ef] object-cover shadow-sm"
+                  <UnitPhotos
+                    layout="avatar"
+                    avatarClassName="h-16 w-16"
+                    members={item.members}
+                    fallbackName={item.name}
+                    fallbackPhoto={item.photoUrl}
                   />
                   <button className="min-w-0 text-left">
                     <div className="flex flex-wrap items-center gap-2">
                       <b className="truncate text-lg text-[#003b71]">
-                        {item.name}
+                        <UnitNames
+                          members={item.members}
+                          fallbackName={item.name}
+                        />
                       </b>
                       <span
                         className={`rounded-full px-3 py-1 text-xs font-extrabold ${attention.tagClass}`}
@@ -275,8 +284,10 @@ export function TVListMode() {
                     <span className="mt-1 block text-xs font-semibold text-slate-600">
                       {item.daysWithoutContact === null
                         ? "Sem contato registrado"
-                        : item.daysWithoutContact === 0
-                          ? "Último contato: hoje"
+                        : !item.hasContact
+                          ? `Nenhum contato há ${item.daysWithoutContact} dias`
+                          : item.daysWithoutContact === 0
+                            ? "Último contato: hoje"
                           : `Último contato há ${item.daysWithoutContact} dias`}
                     </span>
                     <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
@@ -359,22 +370,24 @@ export function TVListMode() {
               <X />
             </button>
             <div className="flex items-center gap-5">
-              <img
-                src={
-                  target.photoUrl ||
-                  "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=160&q=80"
-                }
-                alt=""
-                className="h-24 w-24 rounded-2xl object-cover"
+              <UnitPhotos
+                layout="avatar"
+                avatarClassName="h-24 w-24"
+                members={target.members}
+                fallbackName={target.name}
+                fallbackPhoto={target.photoUrl}
               />
               <div>
                 <p className="text-xs font-bold uppercase tracking-[.2em] text-[#0b8f45]">
                   Registrar contato
                 </p>
-                <h2 className="mt-1 text-3xl font-semibold text-[#003b71]">
-                  {target.name}
+                <h2 className="mt-1 truncate text-3xl font-semibold text-[#003b71]">
+                  <UnitNames
+                    members={target.members}
+                    fallbackName={target.name}
+                  />
                 </h2>
-                <p className="text-slate-500">{target.unitName}</p>
+                <p className="truncate text-slate-500">{target.unitName}</p>
               </div>
             </div>
             <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-5">

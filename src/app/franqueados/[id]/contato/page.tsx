@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+
+type MemberOption = { id: string; name: string };
 
 export default function NewContactPage() {
   const params = useParams();
@@ -11,8 +13,25 @@ export default function NewContactPage() {
     type: "TELEFONE",
     contactedAt: new Date().toISOString().slice(0, 16),
     notes: "",
+    memberId: "",
   });
+  const [members, setMembers] = useState<MemberOption[]>([]);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/franchisees/${franchiseeId}/members`, { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : []))
+      .then((data) => {
+        if (active && Array.isArray(data)) setMembers(data);
+      })
+      .catch(() => {
+        if (active) setMembers([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [franchiseeId]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -21,6 +40,8 @@ export default function NewContactPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...form,
+        // Pessoa opcional: vazio = contato da unidade (fluxo atual).
+        memberId: form.memberId || undefined,
         franchiseeId,
         contactedAt: new Date(form.contactedAt).toISOString(),
       }),
@@ -63,6 +84,26 @@ export default function NewContactPage() {
             className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 outline-none focus:border-[#1f5d8c]"
           />
         </label>
+
+        {members.length > 1 ? (
+          <label className="block text-sm font-medium text-slate-700">
+            Pessoa (opcional)
+            <select
+              value={form.memberId}
+              onChange={(event) =>
+                setForm({ ...form, memberId: event.target.value })
+              }
+              className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 outline-none focus:border-[#1f5d8c]"
+            >
+              <option value="">Unidade (sem pessoa específica)</option>
+              {members.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
 
         <label className="block text-sm font-medium text-slate-700">
           Observação

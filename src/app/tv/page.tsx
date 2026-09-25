@@ -23,6 +23,11 @@ import {
   CONTACT_ATTENTION_CONFIG,
   type ContactAttention,
 } from "@/lib/contact-attention";
+import {
+  UnitNames,
+  UnitPhotos,
+  type UnitMember,
+} from "@/components/tv/unit-members";
 
 type Franchisee = TVFranchisee & {
   moment: "IMPLANTACAO" | "INAUGURADA";
@@ -37,6 +42,8 @@ type Franchisee = TVFranchisee & {
   lastContact: string | null;
   daysWithoutContact: number | null;
   attention: ContactAttention;
+  hasContact: boolean;
+  members: UnitMember[];
   registeredInteractions?: number;
   manualAdjustments?: number;
   totalInteractions?: number;
@@ -65,8 +72,6 @@ const empty: TVData = {
   },
   franchisees: [],
 };
-const photo =
-  "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=900&q=85";
 const metrics = [
   { key: "whatsapp", label: "WhatsApp" },
   { key: "telefone", label: "Telefone" },
@@ -267,11 +272,12 @@ export default function TVPage() {
   }, [currentAttention.carouselSeconds, data.franchisees.length]);
   const list = useMemo(
     () =>
-      data.franchisees.map(({ id, name, unitName, photoUrl }) => ({
+      data.franchisees.map(({ id, name, unitName, photoUrl, members }) => ({
         id,
         name,
         unitName,
         photoUrl,
+        members,
       })),
     [data.franchisees],
   );
@@ -470,10 +476,11 @@ export default function TVPage() {
                   </div>
                 </div>
                 <div className="mt-5 grid min-h-0 flex-1 items-center gap-6 lg:grid-cols-[.7fr_1.3fr]">
-                  <img
-                    src={current.photoUrl || photo}
-                    alt={current.name}
-                    className="mx-auto aspect-[4/5] max-h-[min(54vh,580px)] w-full max-w-sm rounded-[28px] object-cover shadow-2xl"
+                  <UnitPhotos
+                    layout="hero"
+                    members={current.members}
+                    fallbackName={current.name}
+                    fallbackPhoto={current.photoUrl}
                   />
                   <div className="text-white">
                     <p className="flex items-center gap-2 text-base font-extrabold uppercase tracking-[.22em] text-[#b8ee35]">
@@ -482,22 +489,27 @@ export default function TVPage() {
                         ? "Inaugurada"
                         : "Em implantação"}
                     </p>
-                    <h2 className="mt-3 text-5xl font-semibold leading-none xl:text-6xl">
-                      {current.name}
+                    <h2 className="mt-3 truncate text-5xl font-semibold leading-none xl:text-6xl">
+                      <UnitNames
+                        members={current.members}
+                        fallbackName={current.name}
+                      />
                     </h2>
-                    <p className="mt-3 text-2xl text-white/70">
+                    <p className="mt-3 truncate text-2xl text-white/70">
                       {current.unitName}
                     </p>
                     <p className="mt-2 text-sm font-semibold text-white/80">
                       {current.daysWithoutContact === null
                         ? "Sem contato registrado"
-                        : current.daysWithoutContact === 0
-                          ? "Último contato: hoje"
-                          : `Último contato há ${current.daysWithoutContact} dias`}
+                        : !current.hasContact
+                          ? `Nenhum contato há ${current.daysWithoutContact} dias`
+                          : current.daysWithoutContact === 0
+                            ? "Último contato: hoje"
+                            : `Último contato há ${current.daysWithoutContact} dias`}
                     </p>
                     {current.attention !== "em_dia" && (
                       <div
-                        className={`mt-3 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold ${current.attention === "urgente" ? "border-yellow-200/80 bg-yellow-300 text-rose-950 shadow-lg shadow-rose-950/30" : current.attention === "critico" ? "border-red-100/40 bg-red-950/30 text-white" : "border-amber-100/40 bg-amber-950/25 text-amber-50"}`}
+                        className={`mt-3 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold ${current.attention === "urgente" ? "border-yellow-200/80 bg-yellow-300 text-rose-950 shadow-lg shadow-rose-950/30" : current.attention === "muita_atencao" ? "border-orange-200/70 bg-orange-500/25 text-orange-50" : current.attention === "critico" ? "border-red-100/40 bg-red-950/30 text-white" : "border-amber-100/40 bg-amber-950/25 text-amber-50"}`}
                       >
                         <span aria-hidden="true">
                           {current.attention === "urgente" ? "🚨" : "⚠"}

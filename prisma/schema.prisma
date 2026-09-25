@@ -62,14 +62,40 @@ model Franchisee {
   photoUrl  String?         @map("photo_url")
   moment    FranchiseMoment @default(IMPLANTACAO)
   active    Boolean         @default(true)
+  // Datas civis da UNIDADE (não da pessoa): @db.Date evita deslocamento
+  // de timezone — 10/06/2024 permanece 10/06/2024. Opcionais: unidades
+  // existentes ficam NULL até o SUPERADMIN preencher.
+  joinedNetworkAt DateTime? @db.Date @map("joined_network_at")
+  inauguratedAt   DateTime? @db.Date @map("inaugurated_at")
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
 
   contacts           Contact[]
   liveParticipations LiveParticipant[]
   interactionAdjustments InteractionAdjustment[]
+  members            FranchiseeMember[]
 
   @@map("franchisees")
+}
+
+// PESSOA / FRANQUEADO: uma unidade (Franchisee) pode ter várias pessoas.
+// Franchisee continua representando a UNIDADE (1 linha = 1 unidade);
+// name/photoUrl antigos foram preservados para transição compatível.
+model FranchiseeMember {
+  id           String      @id @default(cuid())
+  franchiseeId String
+  franchisee   Franchisee  @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
+  name         String
+  photoUrl     String?
+  active       Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  contacts       Contact[]
+  participations LiveParticipant[]
+
+  @@index([franchiseeId])
+  @@map("franchisee_members")
 }
 
 model InteractionAdjustment {
@@ -77,6 +103,10 @@ model InteractionAdjustment {
   franchiseeId    String
   franchisee      Franchisee @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
   amount          Int
+  // Canal do ajuste (enum ContactType reutilizado, sem enum novo).
+  // Nullable por compatibilidade histórica: ajustes legados têm NULL e
+  // contam apenas no total geral, nunca em um canal específico.
+  type            ContactType?
   notes           String?
   createdByUserId String
   createdByUser   User       @relation("AdjustmentCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
@@ -112,10 +142,15 @@ model LiveParticipant {
   attended     Boolean    @default(true)
   contact      Contact?   @relation(fields: [contactId], references: [id], onDelete: SetNull)
   contactId    String?    @unique
+  // Pessoa participante (opcional): permite 2+ participações por unidade
+  // numa mesma Live sem duplicar unidades. NULL = participação da unidade.
+  member       FranchiseeMember? @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  memberId     String?
   createdAt    DateTime   @default(now())
 
-  @@unique([liveId, franchiseeId])
+  @@unique([liveId, franchiseeId, memberId])
   @@index([franchiseeId])
+  @@index([memberId])
 }
 
 model Contact {
@@ -124,14 +159,19 @@ model Contact {
   franchiseeId String
   user         User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
   userId       String?
+  // Pessoa com quem ocorreu o contato (opcional): NULL = contato da unidade,
+  // fluxo rápido da TV continua sem escolher pessoa. Histórico antigo = NULL.
+  member       FranchiseeMember? @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  memberId     String?
   type         ContactType
   contactedAt  DateTime
   notes        String?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
   liveParticipant LiveParticipant?
 
   @@index([franchiseeId, contactedAt])
   @@index([contactedAt, type])
+  @@index([memberId])
 }

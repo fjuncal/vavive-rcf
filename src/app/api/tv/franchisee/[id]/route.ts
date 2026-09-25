@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/services/auth";
 import { QUALIFIED_CONTACT_TYPES } from "@/lib/constants";
-import { getContactAttention } from "@/lib/contact-attention";
-import { getInteractionTotals } from "@/services/interaction-adjustments";
+import {
+  getContactAttention,
+  getDaysWithoutContact,
+} from "@/lib/contact-attention";
+import { getInteractionBreakdown } from "@/services/interaction-adjustments";
 
 type TVPeriod =
   | "last_7_days"
@@ -51,7 +54,7 @@ export async function GET(
   const { id } = await params;
   const period = parsePeriod(request.nextUrl.searchParams.get("period"));
   const range = periodRange(period);
-  const [franchisee, contactGroups, latest, participations, totals] =
+  const [franchisee, contactGroups, latest, participations, totals, members] =
     await Promise.all([
       prisma.franchisee.findFirst({
         where: { id, active: true },
@@ -61,6 +64,7 @@ export async function GET(
           unitName: true,
           photoUrl: true,
           moment: true,
+          createdAt: true,
         },
       }),
       prisma.contact.groupBy({
@@ -78,8 +82,14 @@ export async function GET(
         select: { attended: true },
       }),
       // Total de interações (tempo total): registros + ajustes manuais.
-      // Não afeta canais, qualificados, último contato ou atenção.
-      getInteractionTotals(id),
+      // Manuais entram por canal/qualificados do mesmo tipo;
+      // NUNCA em último contato, dias sem contato ou atenção.
+      getInteractionBreakdown(id),
+      prisma.franchiseeMember.findMany({
+        where: { franchiseeId: id, active: true },
+        select: { id: true, name: true, photoUrl: true },
+        orderBy: { createdAt: "asc" },
+      }),
     ]);
   if (!franchisee)
     return NextResponse.json(
@@ -90,24 +100,27 @@ export async function GET(
   const counts = new Map(
     contactGroups.map((group) => [group.type, group._count._all]),
   );
-  const daysWithoutContact = latest
-    ? Math.max(
-        0,
-        Math.ceil((Date.now() - latest.contactedAt.getTime()) / 86_400_000),
-      )
-    : null;
+  // Contagens por canal EFETIVAS: registradas no período + manuais do tipo.
+  const effective = (type: keyof typeof totals.byType) =>
+    (counts.get(type) ?? 0) + totals.byType[type].manual;
+  const daysWithoutContact = getDaysWithoutContact({
+    lastContactedAt: latest?.contactedAt ?? null,
+    unitCreatedAt: franchisee.createdAt,
+    moment: franchisee.moment,
+  });
   const livesInvited = participations.length;
   const livesAttended = participations.filter((item) => item.attended).length;
   return NextResponse.json({
     ...franchisee,
-    whatsapp: counts.get("WHATSAPP") ?? 0,
-    telefone: counts.get("TELEFONE") ?? 0,
-    video: counts.get("VIDEO_CHAMADA") ?? 0,
-    presencial: counts.get("PRESENCIAL") ?? 0,
-    live: counts.get("LIVE") ?? 0,
+    whatsapp: effective("WHATSAPP"),
+    telefone: effective("TELEFONE"),
+    video: effective("VIDEO_CHAMADA"),
+    presencial: effective("PRESENCIAL"),
+    live: effective("LIVE"),
     registeredInteractions: totals.registeredInteractions,
     manualAdjustments: totals.manualAdjustments,
     totalInteractions: totals.totalInteractions,
+    members,
     livesInvited,
     livesAttended,
     liveAttendanceRate: livesInvited
@@ -119,10 +132,16 @@ export async function GET(
           month: "2-digit",
         })
       : null,
+    hasContact: latest != null,
     daysWithoutContact,
-    attention: getContactAttention(daysWithoutContact),
-    qualifiedContacts: contactGroups
-      .filter((group) => QUALIFIED_CONTACT_TYPES.includes(group.type))
-      .reduce((total, group) => total + group._count._all, 0),
+    attention: getContactAttention(daysWithoutContact, franchisee.moment),
+    qualifiedContacts:
+      contactGroups
+        .filter((group) => QUALIFIED_CONTACT_TYPES.includes(group.type))
+        .reduce((total, group) => total + group._count._all, 0) +
+      QUALIFIED_CONTACT_TYPES.reduce(
+        (total, type) => total + totals.byType[type].manual,
+        0,
+      ),
   });
 }

@@ -22,6 +22,11 @@ import {
   CONTACT_ATTENTION_CONFIG,
   type ContactAttention,
 } from "@/lib/contact-attention";
+import {
+  UnitNames,
+  UnitPhotos,
+  type UnitMember,
+} from "@/components/tv/unit-members";
 import { VaviveLogo } from "@/components/brand/vavive-logo";
 
 type Slots = 2 | 4;
@@ -45,6 +50,8 @@ type Franchisee = TVFranchisee & {
   lastContact: string | null;
   daysWithoutContact: number | null;
   attention: ContactAttention;
+  hasContact: boolean;
+  members: UnitMember[];
 };
 
 type TVData = {
@@ -332,21 +339,22 @@ function FranchiseeCard({
         <span className="text-right text-xs font-semibold text-white/75">
           {franchisee.daysWithoutContact === null
             ? "Sem contato"
-            : franchisee.daysWithoutContact === 0
-              ? "Contato hoje"
-              : `Há ${franchisee.daysWithoutContact} dias`}
+            : !franchisee.hasContact
+              ? `Nenhum contato há ${franchisee.daysWithoutContact} dias`
+              : franchisee.daysWithoutContact === 0
+                ? "Contato hoje"
+                : `Há ${franchisee.daysWithoutContact} dias`}
         </span>
       </div>
       <div
         className={`flex min-w-0 items-center ${compact ? "mt-3 gap-3" : "mt-5 gap-4 lg:gap-5"}`}
       >
-        <img
-          src={
-            franchisee.photoUrl ||
-            "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=300&q=80"
-          }
-          alt={franchisee.name}
-          className={`shrink-0 rounded-2xl object-cover shadow-lg ${compact ? "h-14 w-14" : "h-28 w-28"}`}
+        <UnitPhotos
+          layout="avatar"
+          avatarClassName={compact ? "h-14 w-14" : "h-28 w-28"}
+          members={franchisee.members}
+          fallbackName={franchisee.name}
+          fallbackPhoto={franchisee.photoUrl}
         />
         <div className="min-w-0">
           <p
@@ -360,7 +368,10 @@ function FranchiseeCard({
           <h2
             className={`truncate font-semibold leading-none ${compact ? "mt-1 text-xl" : "mt-2 text-4xl"}`}
           >
-            {franchisee.name}
+            <UnitNames
+              members={franchisee.members}
+              fallbackName={franchisee.name}
+            />
           </h2>
           <p
             className={`truncate text-white/70 ${compact ? "mt-1 text-sm" : "mt-2 text-xl"}`}

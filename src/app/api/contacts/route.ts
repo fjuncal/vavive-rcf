@@ -10,6 +10,9 @@ import {
 import { getContactAttention } from "@/lib/contact-attention";
 const schema = z.object({
   franchiseeId: z.string().min(1),
+  // Pessoa com quem ocorreu o contato (opcional): NULL = contato da unidade,
+  // preservando o fluxo rápido da TV e o histórico antigo.
+  memberId: z.string().min(1).optional().or(z.literal("")),
   type: z.enum(["WHATSAPP", "TELEFONE", "VIDEO_CHAMADA", "PRESENCIAL", "LIVE"]),
   contactedAt: z.string().datetime(),
   notes: z.string().max(500).optional().or(z.literal("")),
@@ -28,9 +31,23 @@ export async function POST(request: Request) {
     );
   try {
     const p = schema.parse(await request.json());
+    // Se informada, a pessoa precisa pertencer à unidade do contato.
+    if (p.memberId) {
+      const member = await prisma.franchiseeMember.findUnique({
+        where: { id: p.memberId },
+        select: { franchiseeId: true },
+      });
+      if (!member || member.franchiseeId !== p.franchiseeId) {
+        return NextResponse.json(
+          { message: "A pessoa informada não pertence a esta unidade." },
+          { status: 400 },
+        );
+      }
+    }
     const contact = await prisma.contact.create({
       data: {
         franchiseeId: p.franchiseeId,
+        ...(p.memberId ? { memberId: p.memberId } : {}),
         userId: user.id,
         type: p.type,
         contactedAt: new Date(p.contactedAt),
@@ -38,13 +55,16 @@ export async function POST(request: Request) {
       },
       include: {
         user: { select: { name: true, role: true } },
-        franchisee: { select: { name: true, unitName: true } },
+        franchisee: { select: { name: true, unitName: true, moment: true } },
+        member: { select: { name: true } },
       },
     });
     return NextResponse.json(
       {
         ...contact,
-        attentionStatus: getContactAttention(0),
+        // Contato recém-registrado = 0 dias sem contato; atenção recalculada
+        // com a regra da unidade (MUITA ATENÇÃO desaparece de imediato).
+        attentionStatus: getContactAttention(0, contact.franchisee.moment),
         daysWithoutContact: 0,
       },
       { status: 201 },

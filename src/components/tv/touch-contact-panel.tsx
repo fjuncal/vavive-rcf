@@ -2,11 +2,13 @@
 import { useEffect, useState } from "react";
 import { MessageCircle, Phone, Radio, Users, Video } from "lucide-react";
 import type { ContactAttention } from "@/lib/contact-attention";
+import type { UnitMember } from "@/components/tv/unit-members";
 export type TVFranchisee = {
   id: string;
   name: string;
   unitName: string;
   photoUrl?: string | null;
+  members?: UnitMember[];
 };
 export type ContactChannel =
   "WHATSAPP" | "TELEFONE" | "VIDEO_CHAMADA" | "PRESENCIAL" | "LIVE";
@@ -15,6 +17,7 @@ type Recent = {
   type: ContactChannel | "LIVE";
   contactedAt: string;
   user: { name: string };
+  member?: { name: string } | null;
 };
 const channels = [
   { type: "WHATSAPP", label: "WhatsApp", icon: MessageCircle },
@@ -98,6 +101,7 @@ export function QuickContactButtons({
             type: item.type,
             contactedAt: item.contactedAt,
             user: item.user,
+            member: item.member ?? null,
           },
           ...current,
         ].slice(0, 5),
@@ -203,6 +207,12 @@ export function QuickContactButtons({
                 >
                   <span className="truncate font-semibold text-white">
                     {labels[item.type]}
+                    {item.member ? (
+                      <span className="font-normal text-white/60">
+                        {" "}
+                        · {item.member.name}
+                      </span>
+                    ) : null}
                   </span>
                   <span className="shrink-0 text-right text-white/65">
                     {date(item.contactedAt)} · {time(item.contactedAt)}
@@ -242,6 +252,12 @@ export function QuickContactButtons({
                 >
                   <span className="truncate font-semibold text-white">
                     {labels[item.type]}
+                    {item.member ? (
+                      <span className="font-normal text-white/60">
+                        {" "}
+                        · {item.member.name}
+                      </span>
+                    ) : null}
                   </span>
                   <span className="shrink-0">
                     {date(item.contactedAt)} · {time(item.contactedAt)}

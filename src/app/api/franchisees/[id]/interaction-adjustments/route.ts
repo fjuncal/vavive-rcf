@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import type { ContactType } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import {
   getSessionUser,
@@ -14,6 +15,7 @@ import {
 const adjustmentSelect = {
   id: true,
   amount: true,
+  type: true,
   notes: true,
   createdAt: true,
   createdByUser: { select: { name: true } },
@@ -24,16 +26,18 @@ function toPublicAdjustment(
     {
       id: string;
       amount: number;
+      type: ContactType | null;
       notes: string | null;
       createdAt: Date;
       createdByUser: { name: string };
     },
-    "id" | "amount" | "notes" | "createdAt" | "createdByUser"
+    "id" | "amount" | "type" | "notes" | "createdAt" | "createdByUser"
   >,
 ) {
   return {
     id: item.id,
     amount: item.amount,
+    type: item.type,
     notes: item.notes,
     createdAt: item.createdAt,
     createdBy: { name: item.createdByUser.name },
@@ -130,10 +134,12 @@ export async function POST(
   }
 
   // createdByUserId NUNCA vem do frontend: sempre da sessão autenticada.
+  // Nenhum Contact/Live/LiveParticipant/Member é criado: 1 linha agregada.
   const created = await prisma.interactionAdjustment.create({
     data: {
       franchiseeId: id,
       amount: payload.amount,
+      type: payload.type,
       notes: payload.notes || null,
       createdByUserId: user.id,
     },

@@ -87,10 +87,15 @@ async function createParticipation(
   franchiseeId: string,
   attended: boolean,
   input: LiveInput,
+  memberId?: string | null,
 ) {
   const contact = attended
     ? await tx.contact.create({
-        data: { franchiseeId, ...contactData(input) },
+        data: {
+          franchiseeId,
+          ...(memberId ? { memberId } : {}),
+          ...contactData(input),
+        },
       })
     : null;
   return tx.liveParticipant.create({
@@ -99,8 +104,13 @@ async function createParticipation(
       franchiseeId,
       attended,
       contactId: contact?.id,
+      ...(memberId ? { memberId } : {}),
     },
   });
+}
+
+function participationKey(franchiseeId: string, memberId?: string | null) {
+  return `${franchiseeId}::${memberId ?? ""}`;
 }
 
 export type LiveFilters = {
@@ -231,6 +241,7 @@ export async function getLive(id: string) {
               moment: true,
             },
           },
+          member: { select: { id: true, name: true } },
           contact: {
             select: { id: true, type: true, contactedAt: true, userId: true },
           },
@@ -281,6 +292,7 @@ export async function updateLive(id: string, rawInput: unknown) {
           select: {
             id: true,
             franchiseeId: true,
+            memberId: true,
             contactId: true,
             attended: true,
           },
@@ -291,8 +303,13 @@ export async function updateLive(id: string, rawInput: unknown) {
 
     const guests = new Set(input.guestIds);
     const attendees = new Set(input.attendeeIds);
-    const existingByFranchisee = new Map(
-      existing.participants.map((item) => [item.franchiseeId, item]),
+    // Participações de pessoas (memberId) convivem com a da unidade (NULL);
+    // fluxos atuais por unidade continuam endereçando a linha da unidade.
+    const existingByKey = new Map(
+      existing.participants.map((item) => [
+        participationKey(item.franchiseeId, item.memberId),
+        item,
+      ]),
     );
 
     await tx.live.update({
@@ -306,6 +323,9 @@ export async function updateLive(id: string, rawInput: unknown) {
     });
 
     for (const participant of existing.participants) {
+      // Linhas de pessoas (memberId) são preservadas: a sincronização por
+      // unidade gerencia apenas a linha da unidade (memberId NULL).
+      if (participant.memberId) continue;
       if (!guests.has(participant.franchiseeId)) {
         if (participant.contactId)
           await tx.contact.delete({ where: { id: participant.contactId } });
@@ -349,7 +369,7 @@ export async function updateLive(id: string, rawInput: unknown) {
     }
 
     for (const franchiseeId of input.guestIds) {
-      if (!existingByFranchisee.has(franchiseeId)) {
+      if (!existingByKey.has(participationKey(franchiseeId))) {
         await createParticipation(
           tx,
           id,

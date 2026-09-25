@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { fallbackFranchisees } from "@/lib/fallback-data";
 import { FRANCHISE_MOMENT_LABELS } from "@/lib/constants";
 import { formatDate } from "@/lib/utils";
+import { getDaysWithoutContact } from "@/lib/contact-attention";
 import { getSessionUser } from "@/services/auth";
 import { DeleteFranchiseeAction } from "@/components/franchisees/delete-franchisee-action";
 
@@ -35,6 +36,7 @@ async function getFranchiseesPage(query: string, requestedPage: number) {
         photoUrl: true,
         moment: true,
         active: true,
+        createdAt: true,
         contacts: {
           orderBy: { contactedAt: "desc" },
           take: 1,
@@ -49,14 +51,13 @@ async function getFranchiseesPage(query: string, requestedPage: number) {
       total,
       franchisees: franchisees.map((franchisee) => {
         const latest = franchisee.contacts[0];
-        const days = latest
-          ? Math.max(
-              0,
-              Math.ceil(
-                (Date.now() - latest.contactedAt.getTime()) / 86_400_000,
-              ),
-            )
-          : null;
+        // IMPLANTACAO sem contato usa createdAt como referência (nunca null);
+        // demais casos preservam a regra atual.
+        const days = getDaysWithoutContact({
+          lastContactedAt: latest?.contactedAt ?? null,
+          unitCreatedAt: franchisee.createdAt,
+          moment: franchisee.moment,
+        });
         return {
           ...franchisee,
           latest,

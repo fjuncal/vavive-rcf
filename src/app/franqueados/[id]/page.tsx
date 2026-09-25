@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft, ChevronRight, MessageSquarePlus } from "lucide-react";
-import { formatDateTime } from "@/lib/utils";
+import { formatCivilDate, formatDateTime } from "@/lib/utils";
 import { prisma } from "@/lib/db";
 import { FRANCHISE_MOMENT_LABELS, CONTACT_TYPE_LABELS } from "@/lib/constants";
-import { getSessionUser } from "@/services/auth";
-import { getInteractionTotals } from "@/services/interaction-adjustments";
+import { getSessionUser, hasAnyRole, OPERATIONS_ROLES } from "@/services/auth";
+import { getInteractionBreakdown } from "@/services/interaction-adjustments";
 import { InteractionAdjustmentsPanel } from "@/components/franchisees/interaction-adjustments-panel";
+import { FranchiseeMembersPanel } from "@/components/franchisees/franchisee-members-panel";
+import { EditContactDialog } from "@/components/contacts/edit-contact-dialog";
 
 const HISTORY_PAGE_SIZE = 25;
 
@@ -27,8 +29,7 @@ export default async function FranchiseeDetailPage({
     1,
     Number.parseInt(query.page ?? "1", 10) || 1,
   );
-  const [franchisee, totalContacts, contactGroups, sessionUser] =
-    await Promise.all([
+  const [franchisee, totalContacts, sessionUser] = await Promise.all([
       prisma.franchisee.findUnique({
         where: { id },
         select: {
@@ -38,26 +39,26 @@ export default async function FranchiseeDetailPage({
           photoUrl: true,
           moment: true,
           active: true,
+          joinedNetworkAt: true,
+          inauguratedAt: true,
         },
       }),
-      prisma.contact.count({ where: { franchiseeId: id } }),
-      prisma.contact.groupBy({
-        by: ["type"],
-        where: { franchiseeId: id },
-        _count: { _all: true },
-      }),
-      getSessionUser(),
-    ]);
+    prisma.contact.count({ where: { franchiseeId: id } }),
+    getSessionUser(),
+  ]);
 
   if (!franchisee) {
     notFound();
   }
 
   const isSuperAdmin = sessionUser?.role === "SUPERADMIN";
+  const canManageMembers =
+    !!sessionUser && hasAnyRole(sessionUser, OPERATIONS_ROLES);
   // Total derivado: registros reais (Contact) + SUM(ajustes manuais).
-  // Ajustes NÃO alteram último contato, status, nem contagens por canal.
-  const [totals, adjustments] = await Promise.all([
-    getInteractionTotals(id),
+  // Ajustes NÃO alteram último contato, status, nem freshness/attention.
+  // Por canal: Contacts do tipo + ajustes do mesmo tipo (legados só no total).
+  const [breakdown, adjustments, members] = await Promise.all([
+    getInteractionBreakdown(id),
     isSuperAdmin
       ? prisma.interactionAdjustment.findMany({
           where: { franchiseeId: id },
@@ -65,9 +66,23 @@ export default async function FranchiseeDetailPage({
           select: {
             id: true,
             amount: true,
+            type: true,
             notes: true,
             createdAt: true,
             createdByUser: { select: { name: true } },
+          },
+        })
+      : Promise.resolve([]),
+    canManageMembers
+      ? prisma.franchiseeMember.findMany({
+          where: { franchiseeId: id },
+          orderBy: { createdAt: "asc" },
+          select: {
+            id: true,
+            name: true,
+            photoUrl: true,
+            active: true,
+            createdAt: true,
           },
         })
       : Promise.resolve([]),
@@ -85,27 +100,33 @@ export default async function FranchiseeDetailPage({
       type: true,
       contactedAt: true,
       notes: true,
+      memberId: true,
       user: { select: { name: true } },
+      member: { select: { name: true } },
       liveParticipant: {
         select: { live: { select: { id: true, title: true } } },
       },
     },
   });
 
-  const counts = new Map(
-    contactGroups.map((group) => [group.type, group._count._all]),
-  );
-
+  // Contagens por canal EFETIVAS: registradas + manuais do mesmo tipo.
+  // Regra de qualificados preservada (TELEFONE+VIDEO+PRESENCIAL).
   const summary = {
-    WHATSAPP: counts.get("WHATSAPP") ?? 0,
-    TELEFONE: counts.get("TELEFONE") ?? 0,
-    VIDEO_CHAMADA: counts.get("VIDEO_CHAMADA") ?? 0,
-    PRESENCIAL: counts.get("PRESENCIAL") ?? 0,
-    LIVE: counts.get("LIVE") ?? 0,
+    WHATSAPP: breakdown.byType.WHATSAPP,
+    TELEFONE: breakdown.byType.TELEFONE,
+    VIDEO_CHAMADA: breakdown.byType.VIDEO_CHAMADA,
+    PRESENCIAL: breakdown.byType.PRESENCIAL,
+    LIVE: breakdown.byType.LIVE,
   };
 
   const qualifiedCount =
-    summary.TELEFONE + summary.VIDEO_CHAMADA + summary.PRESENCIAL;
+    summary.TELEFONE.total +
+    summary.VIDEO_CHAMADA.total +
+    summary.PRESENCIAL.total;
+  const qualifiedManual =
+    summary.TELEFONE.manual +
+    summary.VIDEO_CHAMADA.manual +
+    summary.PRESENCIAL.manual;
 
   return (
     <div className="space-y-6">
@@ -153,12 +174,38 @@ export default async function FranchiseeDetailPage({
                 {franchisee.active ? "Ativo" : "Inativo"}
               </span>
             </div>
+            <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-slate-600">
+              <span>
+                Entrada na rede:{" "}
+                <b className="text-slate-900">
+                  {formatCivilDate(franchisee.joinedNetworkAt) || "Não informada"}
+                </b>
+              </span>
+              <span>
+                Inauguração:{" "}
+                <b className="text-slate-900">
+                  {formatCivilDate(franchisee.inauguratedAt) || "Não informada"}
+                </b>
+              </span>
+            </div>
           </div>
         </div>
       </div>
 
+      <FranchiseeMembersPanel
+        franchiseeId={franchisee.id}
+        initialMembers={members.map((item) => ({
+          id: item.id,
+          name: item.name,
+          photoUrl: item.photoUrl,
+          active: item.active,
+          createdAt: item.createdAt.toISOString(),
+        }))}
+        canManage={canManageMembers}
+      />
+
       <div className="grid gap-4 md:grid-cols-6">
-        {Object.entries(summary).map(([key, value]) => (
+        {Object.entries(summary).map(([key, channel]) => (
           <div
             key={key}
             className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
@@ -167,7 +214,16 @@ export default async function FranchiseeDetailPage({
               {CONTACT_TYPE_LABELS[key as keyof typeof CONTACT_TYPE_LABELS]}
             </p>
             <p className="mt-3 text-3xl font-semibold text-slate-900">
-              {value}
+              {channel.total}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              {channel.registered} registradas
+              {channel.manual > 0 ? (
+                <span className="font-semibold text-[#0b8f45]">
+                  {" "}
+                  +{channel.manual} manuais
+                </span>
+              ) : null}
             </p>
           </div>
         ))}
@@ -178,15 +234,25 @@ export default async function FranchiseeDetailPage({
           <p className="mt-3 text-3xl font-semibold text-slate-900">
             {qualifiedCount}
           </p>
+          {qualifiedManual > 0 ? (
+            <p className="mt-1 text-xs font-semibold text-[#0b8f45]">
+              +{qualifiedManual} manuais
+            </p>
+          ) : null}
         </div>
       </div>
 
       <InteractionAdjustmentsPanel
         franchiseeId={franchisee.id}
-        initialTotals={totals}
+        initialTotals={{
+          registeredInteractions: breakdown.registeredInteractions,
+          manualAdjustments: breakdown.manualAdjustments,
+          totalInteractions: breakdown.totalInteractions,
+        }}
         initialAdjustments={adjustments.map((item) => ({
           id: item.id,
           amount: item.amount,
+          type: item.type,
           notes: item.notes,
           createdAt: item.createdAt.toISOString(),
           createdBy: { name: item.createdByUser.name },
@@ -213,10 +279,32 @@ export default async function FranchiseeDetailPage({
                     <p className="text-xs text-slate-500">
                       {formatDateTime(contact.contactedAt)}
                     </p>
+                    {contact.member ? (
+                      <p className="mt-0.5 text-xs font-semibold text-[#1f5d8c]">
+                        com {contact.member.name}
+                      </p>
+                    ) : null}
                   </div>
-                  <span className="text-xs uppercase tracking-[0.15em] text-slate-500">
-                    {contact.user?.name ?? "Conta removida"}
-                  </span>
+                  <div className="flex flex-col items-end gap-2">
+                    <span className="text-xs uppercase tracking-[0.15em] text-slate-500">
+                      {contact.user?.name ?? "Conta removida"}
+                    </span>
+                    {isSuperAdmin ? (
+                      <EditContactDialog
+                        contact={{
+                          id: contact.id,
+                          type: contact.type,
+                          contactedAt: contact.contactedAt.toISOString(),
+                          notes: contact.notes,
+                          memberId: contact.memberId,
+                        }}
+                        members={members.map((member) => ({
+                          id: member.id,
+                          name: member.name,
+                        }))}
+                      />
+                    ) : null}
+                  </div>
                 </div>
                 {contact.notes ? (
                   <p className="mt-3 text-sm text-slate-600">

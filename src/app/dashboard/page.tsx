@@ -6,6 +6,7 @@ import { PeriodFilter } from "@/components/dashboard/period-filter";
 import { FranchiseeCommunicationTable } from "@/components/dashboard/franchisee-communication-table";
 import { prisma } from "@/lib/db";
 import { measureServerOperation } from "@/lib/performance";
+import { getManualAdjustmentsSummary } from "@/services/interaction-adjustments";
 
 function parse(value?: string) {
   const date = value ? new Date(`${value}T00:00:00`) : null;
@@ -37,6 +38,7 @@ export default async function DashboardPage({
     contactedFranchisees,
     trendContacts,
     active,
+    manualSummary,
   ] = await measureServerOperation("dashboard.queries", () =>
     Promise.all([
       prisma.contact.groupBy({ by: ["type"], where, _count: { _all: true } }),
@@ -56,6 +58,9 @@ export default async function DashboardPage({
       }),
       prisma.contact.findMany({ where, select: { contactedAt: true } }),
       prisma.franchisee.count({ where: { active: true } }),
+      // Manuais tipados (1 groupBy global, sem N+1): participam das mesmas
+      // estatísticas onde o tipo já participa (qualified preservado).
+      getManualAdjustmentsSummary(),
     ]),
   );
 
@@ -85,6 +90,25 @@ export default async function DashboardPage({
     if (group.type === "LIVE") row.live += count;
     row.total += count;
   }
+  // Canais EFETIVOS por unidade: + manuais do mesmo tipo. Unidades sem
+  // contato no período não ganham linha (membership = contatos reais).
+  for (const [franchiseeId, perType] of manualSummary.byUnit) {
+    const row = rowsByFranchisee.get(franchiseeId);
+    if (!row) continue;
+    const manual = (type: "WHATSAPP" | "TELEFONE" | "VIDEO_CHAMADA" | "PRESENCIAL" | "LIVE") =>
+      perType.get(type) ?? 0;
+    row.whatsapp += manual("WHATSAPP");
+    row.telefone += manual("TELEFONE");
+    row.video += manual("VIDEO_CHAMADA");
+    row.presencial += manual("PRESENCIAL");
+    row.live += manual("LIVE");
+    row.total +=
+      manual("WHATSAPP") +
+      manual("TELEFONE") +
+      manual("VIDEO_CHAMADA") +
+      manual("PRESENCIAL") +
+      manual("LIVE");
+  }
   for (const latest of latestContacts) {
     const row = rowsByFranchisee.get(latest.franchiseeId);
     if (row && latest._max.contactedAt) row.last = latest._max.contactedAt;
@@ -96,13 +120,31 @@ export default async function DashboardPage({
   const channelCount = new Map(
     channelCounts.map((group) => [group.type, group._count._all]),
   );
-  const contactsCount = channelCounts.reduce(
-    (total, group) => total + group._count._all,
+  // Canais EFETIVOS globais: + manuais do mesmo tipo (legados sem canal
+  // não entram em canal algum). Regra de qualificados preservada abaixo.
+  for (const [type, value] of manualSummary.byType) {
+    channelCount.set(type, (channelCount.get(type) ?? 0) + value);
+  }
+  const manualByTypeEntries = [...manualSummary.byType];
+  const manualTotalAll = manualByTypeEntries.reduce(
+    (total, [, value]) => total + value,
     0,
   );
-  const qualified = channelCounts
-    .filter((group) => group.type !== "WHATSAPP")
-    .reduce((total, group) => total + group._count._all, 0);
+  // Qualificados EFETIVOS: regra preservada (tudo exceto WHATSAPP),
+  // somando manuais dos mesmos tipos. WHATSAPP segue excluído.
+  const manualQualified = manualByTypeEntries
+    .filter(([type]) => type !== "WHATSAPP")
+    .reduce((total, [, value]) => total + value, 0);
+  const contactsCount =
+    channelCounts.reduce(
+      (total, group) => total + group._count._all,
+      0,
+    ) + manualTotalAll;
+  const qualified =
+    channelCounts
+      .filter((group) => group.type !== "WHATSAPP")
+      .reduce((total, group) => total + group._count._all, 0) +
+    manualQualified;
   const channels = [
     ["WhatsApp", "WHATSAPP"],
     ["Telefone", "TELEFONE"],

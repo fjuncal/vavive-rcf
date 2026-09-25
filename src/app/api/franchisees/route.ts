@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { OPERATIONS_ROLES, requireAnyRole } from "@/services/auth";
 import { prisma } from "@/lib/db";
+import { civilDateToUTCDate, isValidCivilDate } from "@/lib/utils";
 
 const schema = z.object({
   name: z.string().min(2),
@@ -11,20 +12,94 @@ const schema = z.object({
   active: z.boolean().default(true),
 });
 
+// Datas civis da unidade (YYYY-MM-DD, opcionais, "" = limpar).
+// Somente SUPERADMIN pode enviá-las (validado no handler, não só no front).
+const civilDateField = z
+  .string()
+  .refine((value) => value === "" || isValidCivilDate(value), {
+    message: "Informe uma data válida (AAAA-MM-DD).",
+  })
+  .optional()
+  .or(z.literal(""));
+
+const schemaWithDates = schema
+  .extend({
+    joinedNetworkAt: civilDateField,
+    inauguratedAt: civilDateField,
+  })
+  .superRefine((value, context) => {
+    if (
+      value.joinedNetworkAt &&
+      value.inauguratedAt &&
+      value.inauguratedAt < value.joinedNetworkAt
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["inauguratedAt"],
+        message: "A inauguração não pode ser anterior à entrada na rede.",
+      });
+    }
+  });
+
+function datesForbiddenMessage() {
+  return NextResponse.json(
+    { message: "Somente SUPERADMIN pode alterar as datas da unidade." },
+    { status: 403 },
+  );
+}
+
+function hasDateKeys(body: unknown) {
+  return (
+    typeof body === "object" &&
+    body !== null &&
+    ("joinedNetworkAt" in body || "inauguratedAt" in body)
+  );
+}
+
+function toNullableDate(value: string | undefined): Date | null {
+  return value ? civilDateToUTCDate(value) : null;
+}
+
 export async function POST(request: Request) {
-  await requireAnyRole(OPERATIONS_ROLES);
+  const sessionUser = await requireAnyRole(OPERATIONS_ROLES);
+  const isSuperAdmin = sessionUser.role === "SUPERADMIN";
 
   try {
-    const payload = schema.parse(await request.json());
+    const body = await request.json();
+    if (!isSuperAdmin && hasDateKeys(body)) return datesForbiddenMessage();
+    const payload = (isSuperAdmin ? schemaWithDates : schema).parse(body);
 
-    const franchisee = await prisma.franchisee.create({
-      data: {
-        name: payload.name,
-        unitName: payload.unitName,
-        photoUrl: payload.photoUrl || null,
-        moment: payload.moment,
-        active: payload.active,
-      },
+    // Unidade nova já nasce com sua pessoa principal (transição compatível:
+    // unidades antigas receberam a pessoa via backfill da migration).
+    const franchisee = await prisma.$transaction(async (tx) => {
+      const created = await tx.franchisee.create({
+        data: {
+          name: payload.name,
+          unitName: payload.unitName,
+          photoUrl: payload.photoUrl || null,
+          moment: payload.moment,
+          active: payload.active,
+          ...(isSuperAdmin
+            ? {
+                joinedNetworkAt: toNullableDate(
+                  (payload as { joinedNetworkAt?: string }).joinedNetworkAt,
+                ),
+                inauguratedAt: toNullableDate(
+                  (payload as { inauguratedAt?: string }).inauguratedAt,
+                ),
+              }
+            : {}),
+        },
+      });
+      await tx.franchiseeMember.create({
+        data: {
+          franchiseeId: created.id,
+          name: payload.name,
+          photoUrl: payload.photoUrl || null,
+          active: payload.active,
+        },
+      });
+      return created;
     });
 
     return NextResponse.json(franchisee, { status: 201 });
@@ -44,15 +119,46 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  await requireAnyRole(OPERATIONS_ROLES);
+  const sessionUser = await requireAnyRole(OPERATIONS_ROLES);
+  const isSuperAdmin = sessionUser.role === "SUPERADMIN";
   try {
     const body = await request.json();
     const id = String(body.id || "");
-    const payload = schema.parse(body);
+    if (!isSuperAdmin && hasDateKeys(body)) return datesForbiddenMessage();
+    const payload = (isSuperAdmin ? schemaWithDates : schema).parse(body);
     const franchisee = await prisma.franchisee.update({
       where: { id },
-      data: { ...payload, photoUrl: payload.photoUrl || null },
+      data: {
+        name: payload.name,
+        unitName: payload.unitName,
+        photoUrl: payload.photoUrl || null,
+        moment: payload.moment,
+        active: payload.active,
+        ...(isSuperAdmin
+          ? {
+              joinedNetworkAt: toNullableDate(
+                (payload as z.infer<typeof schemaWithDates>).joinedNetworkAt,
+              ),
+              inauguratedAt: toNullableDate(
+                (payload as z.infer<typeof schemaWithDates>).inauguratedAt,
+              ),
+            }
+          : {}),
+      },
     });
+    // Transição compatível: Franchisee.name/photoUrl continuam sendo a
+    // referência da pessoa principal; espelha na pessoa mais antiga.
+    const primary = await prisma.franchiseeMember.findFirst({
+      where: { franchiseeId: id },
+      orderBy: { createdAt: "asc" },
+      select: { id: true },
+    });
+    if (primary) {
+      await prisma.franchiseeMember.update({
+        where: { id: primary.id },
+        data: { name: payload.name, photoUrl: payload.photoUrl || null },
+      });
+    }
     return NextResponse.json(franchisee);
   } catch (error) {
     if (error instanceof z.ZodError)

@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { ContactType } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/services/auth";
 import { QUALIFIED_CONTACT_TYPES } from "@/lib/constants";
-import { getContactAttention } from "@/lib/contact-attention";
-import { getManualAdjustmentsTotals } from "@/services/interaction-adjustments";
+import {
+  getContactAttention,
+  getDaysWithoutContact,
+} from "@/lib/contact-attention";
+import {
+  getManualAdjustmentsByType,
+  getManualAdjustmentsTotals,
+} from "@/services/interaction-adjustments";
 
 type TVPeriod =
   | "last_7_days"
@@ -59,6 +66,7 @@ export async function GET(request: NextRequest) {
       unitName: true,
       photoUrl: true,
       moment: true,
+      createdAt: true,
     },
   });
   const ids = franchisees.map((item) => item.id);
@@ -68,6 +76,8 @@ export async function GET(request: NextRequest) {
     participations,
     lifetimeContactGroups,
     manualTotals,
+    manualByType,
+    memberRows,
   ] = await Promise.all([
       prisma.contact.groupBy({
         by: ["franchiseeId", "type"],
@@ -90,14 +100,23 @@ export async function GET(request: NextRequest) {
         select: { franchiseeId: true, attended: true },
       }),
       // Total de interações no tempo (sem filtro de período): base para
-      // registeredInteractions. Ajustes manuais NUNCA entram nas contagens
-      // por canal, qualificados, último contato ou atenção.
+      // registeredInteractions. Ajustes manuais entram nas contagens por
+      // canal/qualificados do mesmo tipo, mas NUNCA em último contato,
+      // dias sem contato ou atenção.
       prisma.contact.groupBy({
         by: ["franchiseeId"],
         where: { franchiseeId: { in: ids } },
         _count: { _all: true },
       }),
       getManualAdjustmentsTotals(ids),
+      // Manuais por canal (1 groupBy em lote, sem N+1 e sem históricos).
+      getManualAdjustmentsByType(ids),
+      // Pessoas da unidade (1 query para todas, sem N+1 e sem históricos).
+      prisma.franchiseeMember.findMany({
+        where: { franchiseeId: { in: ids }, active: true },
+        select: { id: true, franchiseeId: true, name: true, photoUrl: true },
+        orderBy: [{ franchiseeId: "asc" }, { createdAt: "asc" }],
+      }),
     ]);
 
   const contactsByFranchisee = new Map<string, Map<string, number>>();
@@ -124,19 +143,37 @@ export async function GET(request: NextRequest) {
   const lastContactByFranchisee = new Map(
     latestContacts.map((item) => [item.franchiseeId, item._max.contactedAt]),
   );
+  const membersByFranchisee = new Map<string, Array<{ id: string; name: string; photoUrl: string | null }>>();
+  for (const member of memberRows) {
+    const list = membersByFranchisee.get(member.franchiseeId) ?? [];
+    list.push({ id: member.id, name: member.name, photoUrl: member.photoUrl });
+    membersByFranchisee.set(member.franchiseeId, list);
+  }
   const lifetimeByFranchisee = new Map(
     lifetimeContactGroups.map((item) => [
       item.franchiseeId,
       item._count._all,
     ]),
   );
-  const qualified = periodContactGroups
-    .filter((group) => QUALIFIED_CONTACT_TYPES.includes(group.type))
-    .reduce((total, group) => total + group._count._all, 0);
+  // Manuais agregados por tipo (todas as unidades): participam das mesmas
+  // estatísticas onde o ContactType já participa (qualified preservado).
+  const manualByTypeTotal = new Map<string, number>();
+  for (const perUnit of manualByType.values()) {
+    for (const [type, value] of perUnit) {
+      manualByTypeTotal.set(type, (manualByTypeTotal.get(type) ?? 0) + value);
+    }
+  }
+  const manualOf = (type: string) => manualByTypeTotal.get(type) ?? 0;
+  const qualified =
+    periodContactGroups
+      .filter((group) => QUALIFIED_CONTACT_TYPES.includes(group.type))
+      .reduce((total, group) => total + group._count._all, 0) +
+    QUALIFIED_CONTACT_TYPES.reduce((total, type) => total + manualOf(type), 0);
   const countType = (type: string) =>
     periodContactGroups
       .filter((group) => group.type === type)
-      .reduce((total, group) => total + group._count._all, 0);
+      .reduce((total, group) => total + group._count._all, 0) +
+    manualOf(type);
   const contactedFranchisees = new Set(
     periodContactGroups
       .filter((group) => QUALIFIED_CONTACT_TYPES.includes(group.type))
@@ -165,13 +202,18 @@ export async function GET(request: NextRequest) {
         attended: 0,
       };
       const latest = lastContactByFranchisee.get(franchisee.id);
-      const daysWithoutContact = latest
-        ? Math.max(0, Math.ceil((Date.now() - latest.getTime()) / 86_400_000))
-        : null;
-      const count = (type: string) => counts.get(type) ?? 0;
+      // Atenção DA UNIDADE (nunca por pessoa): qualquer contato válido
+      // recalcula; IMPLANTACAO sem contato usa createdAt como referência.
+      const daysWithoutContact = getDaysWithoutContact({
+        lastContactedAt: latest ?? null,
+        unitCreatedAt: franchisee.createdAt,
+        moment: franchisee.moment,
+      });
+      const count = (type: ContactType) =>
+        (counts.get(type) ?? 0) +
+        (manualByType.get(franchisee.id)?.get(type) ?? 0);
       // Total de interações (tempo total, sem filtro de período):
-      // registros reais + ajustes manuais. Não afeta canais, qualificados,
-      // último contato ou atenção.
+      // registros reais + ajustes manuais (inclui legados sem canal).
       const registeredInteractions = lifetimeByFranchisee.get(franchisee.id) ?? 0;
       const manualAdjustments = manualTotals.get(franchisee.id) ?? 0;
       return {
@@ -199,8 +241,10 @@ export async function GET(request: NextRequest) {
               month: "2-digit",
             })
           : null,
+        hasContact: latest != null,
         daysWithoutContact,
-        attention: getContactAttention(daysWithoutContact),
+        attention: getContactAttention(daysWithoutContact, franchisee.moment),
+        members: membersByFranchisee.get(franchisee.id) ?? [],
       };
     }),
   });
