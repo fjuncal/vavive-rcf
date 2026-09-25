@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/services/auth";
 import { QUALIFIED_CONTACT_TYPES } from "@/lib/constants";
 import { getContactAttention } from "@/lib/contact-attention";
+import { getManualAdjustmentsTotals } from "@/services/interaction-adjustments";
 
 type TVPeriod =
   | "last_7_days"
@@ -61,8 +62,13 @@ export async function GET(request: NextRequest) {
     },
   });
   const ids = franchisees.map((item) => item.id);
-  const [periodContactGroups, latestContacts, participations] =
-    await Promise.all([
+  const [
+    periodContactGroups,
+    latestContacts,
+    participations,
+    lifetimeContactGroups,
+    manualTotals,
+  ] = await Promise.all([
       prisma.contact.groupBy({
         by: ["franchiseeId", "type"],
         where: {
@@ -83,6 +89,15 @@ export async function GET(request: NextRequest) {
         },
         select: { franchiseeId: true, attended: true },
       }),
+      // Total de interações no tempo (sem filtro de período): base para
+      // registeredInteractions. Ajustes manuais NUNCA entram nas contagens
+      // por canal, qualificados, último contato ou atenção.
+      prisma.contact.groupBy({
+        by: ["franchiseeId"],
+        where: { franchiseeId: { in: ids } },
+        _count: { _all: true },
+      }),
+      getManualAdjustmentsTotals(ids),
     ]);
 
   const contactsByFranchisee = new Map<string, Map<string, number>>();
@@ -108,6 +123,12 @@ export async function GET(request: NextRequest) {
 
   const lastContactByFranchisee = new Map(
     latestContacts.map((item) => [item.franchiseeId, item._max.contactedAt]),
+  );
+  const lifetimeByFranchisee = new Map(
+    lifetimeContactGroups.map((item) => [
+      item.franchiseeId,
+      item._count._all,
+    ]),
   );
   const qualified = periodContactGroups
     .filter((group) => QUALIFIED_CONTACT_TYPES.includes(group.type))
@@ -148,6 +169,11 @@ export async function GET(request: NextRequest) {
         ? Math.max(0, Math.ceil((Date.now() - latest.getTime()) / 86_400_000))
         : null;
       const count = (type: string) => counts.get(type) ?? 0;
+      // Total de interações (tempo total, sem filtro de período):
+      // registros reais + ajustes manuais. Não afeta canais, qualificados,
+      // último contato ou atenção.
+      const registeredInteractions = lifetimeByFranchisee.get(franchisee.id) ?? 0;
+      const manualAdjustments = manualTotals.get(franchisee.id) ?? 0;
       return {
         id: franchisee.id,
         name: franchisee.name,
@@ -159,6 +185,9 @@ export async function GET(request: NextRequest) {
         video: count("VIDEO_CHAMADA"),
         presencial: count("PRESENCIAL"),
         live: count("LIVE"),
+        registeredInteractions,
+        manualAdjustments,
+        totalInteractions: registeredInteractions + manualAdjustments,
         livesInvited: liveStats.invited,
         livesAttended: liveStats.attended,
         liveAttendanceRate: liveStats.invited

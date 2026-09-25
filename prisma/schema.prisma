@@ -41,6 +41,7 @@ model User {
   sessions     Session[]
   hostedLives  Live[]    @relation("LiveHost")
   createdLives Live[]    @relation("LiveCreator")
+  createdAdjustments InteractionAdjustment[] @relation("AdjustmentCreator")
 }
 
 model Session {
@@ -66,8 +67,23 @@ model Franchisee {
 
   contacts           Contact[]
   liveParticipations LiveParticipant[]
+  interactionAdjustments InteractionAdjustment[]
 
   @@map("franchisees")
+}
+
+model InteractionAdjustment {
+  id              String     @id @default(cuid())
+  franchiseeId    String
+  franchisee      Franchisee @relation(fields: [franchiseeId], references: [id], onDelete: Cascade)
+  amount          Int
+  notes           String?
+  createdByUserId String
+  createdByUser   User       @relation("AdjustmentCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdAt       DateTime   @default(now())
+
+  @@index([franchiseeId, createdAt])
+  @@map("interaction_adjustments")
 }
 
 model Live {

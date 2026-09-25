@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/services/auth";
 import { QUALIFIED_CONTACT_TYPES } from "@/lib/constants";
 import { getContactAttention } from "@/lib/contact-attention";
+import { getInteractionTotals } from "@/services/interaction-adjustments";
 
 type TVPeriod =
   | "last_7_days"
@@ -50,8 +51,8 @@ export async function GET(
   const { id } = await params;
   const period = parsePeriod(request.nextUrl.searchParams.get("period"));
   const range = periodRange(period);
-  const [franchisee, contactGroups, latest, participations] = await Promise.all(
-    [
+  const [franchisee, contactGroups, latest, participations, totals] =
+    await Promise.all([
       prisma.franchisee.findFirst({
         where: { id, active: true },
         select: {
@@ -76,8 +77,10 @@ export async function GET(
         where: { franchiseeId: id, live: { scheduledAt: range } },
         select: { attended: true },
       }),
-    ],
-  );
+      // Total de interações (tempo total): registros + ajustes manuais.
+      // Não afeta canais, qualificados, último contato ou atenção.
+      getInteractionTotals(id),
+    ]);
   if (!franchisee)
     return NextResponse.json(
       { message: "Franqueado não encontrado." },
@@ -102,6 +105,9 @@ export async function GET(
     video: counts.get("VIDEO_CHAMADA") ?? 0,
     presencial: counts.get("PRESENCIAL") ?? 0,
     live: counts.get("LIVE") ?? 0,
+    registeredInteractions: totals.registeredInteractions,
+    manualAdjustments: totals.manualAdjustments,
+    totalInteractions: totals.totalInteractions,
     livesInvited,
     livesAttended,
     liveAttendanceRate: livesInvited

@@ -4,6 +4,9 @@ import { ChevronLeft, ChevronRight, MessageSquarePlus } from "lucide-react";
 import { formatDateTime } from "@/lib/utils";
 import { prisma } from "@/lib/db";
 import { FRANCHISE_MOMENT_LABELS, CONTACT_TYPE_LABELS } from "@/lib/constants";
+import { getSessionUser } from "@/services/auth";
+import { getInteractionTotals } from "@/services/interaction-adjustments";
+import { InteractionAdjustmentsPanel } from "@/components/franchisees/interaction-adjustments-panel";
 
 const HISTORY_PAGE_SIZE = 25;
 
@@ -24,29 +27,51 @@ export default async function FranchiseeDetailPage({
     1,
     Number.parseInt(query.page ?? "1", 10) || 1,
   );
-  const [franchisee, totalContacts, contactGroups] = await Promise.all([
-    prisma.franchisee.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        name: true,
-        unitName: true,
-        photoUrl: true,
-        moment: true,
-        active: true,
-      },
-    }),
-    prisma.contact.count({ where: { franchiseeId: id } }),
-    prisma.contact.groupBy({
-      by: ["type"],
-      where: { franchiseeId: id },
-      _count: { _all: true },
-    }),
-  ]);
+  const [franchisee, totalContacts, contactGroups, sessionUser] =
+    await Promise.all([
+      prisma.franchisee.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          name: true,
+          unitName: true,
+          photoUrl: true,
+          moment: true,
+          active: true,
+        },
+      }),
+      prisma.contact.count({ where: { franchiseeId: id } }),
+      prisma.contact.groupBy({
+        by: ["type"],
+        where: { franchiseeId: id },
+        _count: { _all: true },
+      }),
+      getSessionUser(),
+    ]);
 
   if (!franchisee) {
     notFound();
   }
+
+  const isSuperAdmin = sessionUser?.role === "SUPERADMIN";
+  // Total derivado: registros reais (Contact) + SUM(ajustes manuais).
+  // Ajustes NÃO alteram último contato, status, nem contagens por canal.
+  const [totals, adjustments] = await Promise.all([
+    getInteractionTotals(id),
+    isSuperAdmin
+      ? prisma.interactionAdjustment.findMany({
+          where: { franchiseeId: id },
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            amount: true,
+            notes: true,
+            createdAt: true,
+            createdByUser: { select: { name: true } },
+          },
+        })
+      : Promise.resolve([]),
+  ]);
 
   const pages = Math.max(1, Math.ceil(totalContacts / HISTORY_PAGE_SIZE));
   const page = Math.min(requestedPage, pages);
@@ -155,6 +180,19 @@ export default async function FranchiseeDetailPage({
           </p>
         </div>
       </div>
+
+      <InteractionAdjustmentsPanel
+        franchiseeId={franchisee.id}
+        initialTotals={totals}
+        initialAdjustments={adjustments.map((item) => ({
+          id: item.id,
+          amount: item.amount,
+          notes: item.notes,
+          createdAt: item.createdAt.toISOString(),
+          createdBy: { name: item.createdByUser.name },
+        }))}
+        isSuperAdmin={isSuperAdmin}
+      />
 
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h3 className="mb-4 text-lg font-semibold text-slate-900">

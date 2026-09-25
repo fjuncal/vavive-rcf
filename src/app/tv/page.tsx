@@ -37,6 +37,9 @@ type Franchisee = TVFranchisee & {
   lastContact: string | null;
   daysWithoutContact: number | null;
   attention: ContactAttention;
+  registeredInteractions?: number;
+  manualAdjustments?: number;
+  totalInteractions?: number;
 };
 type TVPeriod =
   | "last_7_days"
@@ -516,6 +519,24 @@ export default function TVPage() {
                           <p className="mt-1 text-xs text-white/60">{label}</p>
                         </div>
                       ))}
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-sm">
+                      <span className="font-semibold text-[#b8ee35]">
+                        Total de interações
+                      </span>
+                      <span className="text-2xl font-semibold">
+                        {current.totalInteractions ??
+                          current.whatsapp +
+                            current.telefone +
+                            current.video +
+                            current.presencial +
+                            current.live}
+                      </span>
+                      {(current.manualAdjustments ?? 0) > 0 && (
+                        <span className="rounded-full bg-white/15 px-2.5 py-1 text-xs font-bold">
+                          inclui +{current.manualAdjustments} manuais
+                        </span>
+                      )}
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-sm">
                       <span className="font-semibold text-[#b8ee35]">
