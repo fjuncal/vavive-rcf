@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Minus, Pencil, Plus, Search, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, Minus, Pencil, Plus, Search, X } from "lucide-react";
 import { MONTH_LABELS, formatMonthYear } from "@/lib/constants";
 import type { MonthlyOverviewRow } from "@/services/monthly-service-counts";
 
@@ -52,6 +52,34 @@ function formatVariation(value: number | null) {
 
 const thSortClass =
   "inline-flex items-center gap-1 hover:text-slate-800";
+
+// Seletor de competência (visual apenas): selects nativos estilizados com
+// chevron discreto. Valores continuam numéricos (month 1-12, year).
+const competenceSelectClass =
+  "w-full appearance-none rounded-xl border border-slate-200 bg-white py-2.5 pl-3 pr-9 text-sm font-normal text-slate-800 outline-none transition hover:border-slate-300 focus:border-[#1f5d8c] focus:ring-2 focus:ring-[#1f5d8c]/20";
+
+// Faixa de anos dinâmica em torno do ano atual (sem hardcode). O ano
+// selecionado é sempre incluído para o select nunca ficar em branco,
+// mesmo vindo de querystring antiga.
+const COMPETENCE_YEAR_PAST = 5;
+const COMPETENCE_YEAR_FUTURE = 2;
+
+function competenceYears(selectedYear: number) {
+  const currentYear = new Date().getFullYear();
+  const years: number[] = [];
+  for (
+    let year = currentYear - COMPETENCE_YEAR_PAST;
+    year <= currentYear + COMPETENCE_YEAR_FUTURE;
+    year += 1
+  ) {
+    years.push(year);
+  }
+  if (!years.includes(selectedYear)) {
+    years.push(selectedYear);
+    years.sort((a, b) => a - b);
+  }
+  return years;
+}
 
 export function MonthlyOverview({
   initial,
@@ -199,33 +227,48 @@ export function MonthlyOverview({
           </h1>
           <p className="mt-2 text-sm text-slate-500">Visão mensal das unidades</p>
         </div>
-        <div className="flex items-end gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <label className="block text-sm font-semibold text-slate-700">
-            Mês
-            <select
-              value={competence.month}
-              onChange={(event) => loadCompetence(competence.year, Number(event.target.value))}
-              className="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 font-normal outline-none focus:border-[#1f5d8c] focus:bg-white"
-            >
-              {MONTH_LABELS.map((label, index) => (
-                <option key={index + 1} value={index + 1}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block text-sm font-semibold text-slate-700">
-            Ano
-            <input
-              type="number"
-              min={2000}
-              max={2100}
-              step={1}
-              value={competence.year}
-              onChange={(event) => loadCompetence(Number(event.target.value) || competence.year, competence.month)}
-              className="mt-2 w-28 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 font-normal outline-none focus:border-[#1f5d8c] focus:bg-white"
-            />
-          </label>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-xs font-bold uppercase tracking-[.16em] text-slate-500">
+            Competência
+          </p>
+          <div className="mt-3 grid grid-cols-1 gap-3 min-[420px]:grid-cols-[minmax(0,1fr)_auto]">
+            <label className="block text-sm font-semibold text-slate-700">
+              Mês
+              <span className="relative mt-2 block">
+                <select
+                  value={competence.month}
+                  onChange={(event) => loadCompetence(competence.year, Number(event.target.value))}
+                  className={`${competenceSelectClass} min-w-40`}
+                  aria-label="Mês de referência"
+                >
+                  {MONTH_LABELS.map((label, index) => (
+                    <option key={index + 1} value={index + 1}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              </span>
+            </label>
+            <label className="block text-sm font-semibold text-slate-700">
+              Ano
+              <span className="relative mt-2 block">
+                <select
+                  value={competence.year}
+                  onChange={(event) => loadCompetence(Number(event.target.value), competence.month)}
+                  className={`${competenceSelectClass} w-full min-[420px]:w-28`}
+                  aria-label="Ano de referência"
+                >
+                  {competenceYears(competence.year).map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              </span>
+            </label>
+          </div>
         </div>
       </div>
 
