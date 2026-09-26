@@ -5,6 +5,7 @@ import { VaviveLogo } from "@/components/brand/vavive-logo";
 import {
   BarChart3,
   Building2,
+  ClipboardList,
   LayoutDashboard,
   Radio,
   MonitorPlay,
@@ -15,6 +16,7 @@ const items = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/franqueados", label: "Franqueados", icon: Users },
   { href: "/contatos", label: "Contatos", icon: BarChart3 },
+  { href: "/atendimentos", label: "Atendimentos", icon: ClipboardList },
   { href: "/lives", label: "Lives", icon: Radio },
   { href: "/tv/modo", label: "Modo TV", icon: MonitorPlay },
 ];

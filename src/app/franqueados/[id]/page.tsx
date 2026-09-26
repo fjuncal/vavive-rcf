@@ -317,6 +317,7 @@ export default async function FranchiseeDetailPage({
                           id: member.id,
                           name: member.name,
                         }))}
+                        lockTypeAndDate={!!contact.liveParticipant}
                       />
                     ) : null}
                   </div>

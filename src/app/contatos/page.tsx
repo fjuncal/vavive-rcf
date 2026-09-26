@@ -94,6 +94,8 @@ export default async function ContactsPage({
     include: {
       franchisee: { select: { id: true, name: true, unitName: true } },
       user: { select: { name: true } },
+      member: { select: { name: true } },
+      liveParticipant: { select: { id: true } },
     },
   });
   // Membros das unidades visíveis na página: insumo do EditContactDialog
@@ -186,13 +188,15 @@ export default async function ContactsPage({
       </form>
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="min-w-[760px] w-full text-left text-sm">
+          <table className="min-w-[1080px] w-full text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-[.12em] text-slate-500">
               <tr>
-                <th className="px-5 py-4">Franqueado</th>
+                <th className="px-5 py-4">Franquia / Unidade</th>
+                <th className="px-4 py-4">Pessoa</th>
                 <th className="px-4 py-4">Canal</th>
                 <th className="px-4 py-4">Data e horário</th>
-                <th className="px-5 py-4">Responsável</th>
+                <th className="px-4 py-4">Responsável</th>
+                <th className="px-4 py-4">Observação</th>
                 {user.role === "SUPERADMIN" && (
                   <th className="px-5 py-4 text-right">Ações</th>
                 )}
@@ -208,6 +212,20 @@ export default async function ContactsPage({
                     <div className="mt-1 text-xs text-slate-500">
                       {contact.franchisee.unitName}
                     </div>
+                  </td>
+                  <td className="px-4 py-4">
+                    {contact.member ? (
+                      <span className="font-medium text-[#1f5d8c]">
+                        {contact.member.name}
+                      </span>
+                    ) : (
+                      <span
+                        title="Sem pessoa específica"
+                        className="text-slate-300"
+                      >
+                        —
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-4">
                     <span
@@ -232,6 +250,15 @@ export default async function ContactsPage({
                   <td className="px-5 py-4 text-slate-600">
                     {contact.user?.name ?? "Conta removida"}
                   </td>
+                  <td className="max-w-[220px] px-4 py-4 text-slate-600">
+                    {contact.notes ? (
+                      <span title={contact.notes} className="block truncate">
+                        {contact.notes}
+                      </span>
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
+                  </td>
                   {user.role === "SUPERADMIN" && (
                     <td className="px-5 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
@@ -246,6 +273,7 @@ export default async function ContactsPage({
                           members={
                             membersByFranchisee.get(contact.franchisee.id) ?? []
                           }
+                          lockTypeAndDate={!!contact.liveParticipant}
                         />
                         <AuditActions
                           id={contact.id}
@@ -259,7 +287,7 @@ export default async function ContactsPage({
               {!contacts.length && (
                 <tr>
                   <td
-                    colSpan={user.role === "SUPERADMIN" ? 5 : 4}
+                    colSpan={user.role === "SUPERADMIN" ? 7 : 6}
                     className="px-5 py-14 text-center text-slate-500"
                   >
                     Nenhum contato encontrado para os filtros selecionados.

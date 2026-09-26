@@ -36,9 +36,13 @@ const inputClass =
 export function EditContactDialog({
   contact,
   members,
+  lockTypeAndDate = false,
 }: {
   contact: EditableContact;
   members: Array<{ id: string; name: string }>;
+  // Contato gerado por Live: backend bloqueia type/contactedAt; o dialog
+  // reflete a regra (autoridade continua no PUT /api/contacts/[id]).
+  lockTypeAndDate?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -144,7 +148,8 @@ export function EditContactDialog({
                     onChange={(event) =>
                       setType(event.target.value as Channel)
                     }
-                    className={inputClass}
+                    disabled={lockTypeAndDate}
+                    className={`${inputClass} disabled:cursor-not-allowed disabled:opacity-60`}
                   >
                     {(Object.keys(CONTACT_TYPE_LABELS) as Channel[]).map(
                       (option) => (
@@ -179,7 +184,8 @@ export function EditContactDialog({
                     value={date}
                     onChange={(event) => setDate(event.target.value)}
                     required
-                    className={inputClass}
+                    disabled={lockTypeAndDate}
+                    className={`${inputClass} disabled:cursor-not-allowed disabled:opacity-60`}
                   />
                 </label>
                 <label className="block text-sm font-semibold text-slate-700">
@@ -189,10 +195,17 @@ export function EditContactDialog({
                     value={time}
                     onChange={(event) => setTime(event.target.value)}
                     required
-                    className={inputClass}
+                    disabled={lockTypeAndDate}
+                    className={`${inputClass} disabled:cursor-not-allowed disabled:opacity-60`}
                   />
                 </label>
               </div>
+              {lockTypeAndDate ? (
+                <p className="rounded-xl bg-slate-100 px-4 py-3 text-sm text-slate-600">
+                  Contato gerado por Live: canal e data não podem ser
+                  alterados. Pessoa e observação seguem editáveis.
+                </p>
+              ) : null}
               <label className="block text-sm font-semibold text-slate-700">
                 Observação
                 <textarea

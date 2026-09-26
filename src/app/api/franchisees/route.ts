@@ -83,6 +83,31 @@ function toNullableDate(value: string | undefined): Date | null {
   return value ? civilDateToUTCDate(value) : null;
 }
 
+export async function GET() {
+  // Lista enxuta para o seletor "Unidade existente" de /franqueados/new.
+  // Mesma permissão de criação (OPERATIONS_ROLES): backend é autoridade.
+  // Ativas primeiro, ordem alfabética por unidade; inclui membros para o
+  // card de contexto (evita N+1 no front). Somente leitura, sem alterações.
+  await requireAnyRole(OPERATIONS_ROLES);
+
+  const franchisees = await prisma.franchisee.findMany({
+    orderBy: [{ active: "desc" }, { unitName: "asc" }],
+    select: {
+      id: true,
+      unitName: true,
+      name: true,
+      moment: true,
+      active: true,
+      members: {
+        orderBy: { createdAt: "asc" },
+        select: { id: true, name: true },
+      },
+    },
+  });
+
+  return NextResponse.json(franchisees);
+}
+
 export async function POST(request: Request) {
   const sessionUser = await requireAnyRole(OPERATIONS_ROLES);
   const isSuperAdmin = sessionUser.role === "SUPERADMIN";
@@ -96,6 +121,34 @@ export async function POST(request: Request) {
     const initialMonthly = isSuperAdmin
       ? initialMonthlySchema.parse(body).monthlyServiceCount
       : undefined;
+
+    // Auditoria de duplicidade EXATA do nome da unidade (aplicação, sem
+    // migration/constraint): trim + case-insensitive. Ex.: "Vitória" e
+    // " vitória " colidem. NÃO é fuzzy: nomes apenas parecidos passam.
+    // Limitação documentada: sem constraint única há janela de race
+    // condition entre a checagem e o create; o aviso é amigável (409) e
+    // orienta a usar o fluxo "Unidade existente".
+    // Tabela pequena (~100 unidades): varredura em memória é suficiente.
+    const normalizedUnitName = payload.unitName.trim().toLocaleLowerCase("pt-BR");
+    if (normalizedUnitName) {
+      const siblings = await prisma.franchisee.findMany({
+        select: { unitName: true },
+      });
+      const duplicate = siblings.some(
+        (sibling) =>
+          sibling.unitName.trim().toLocaleLowerCase("pt-BR") ===
+          normalizedUnitName,
+      );
+      if (duplicate) {
+        return NextResponse.json(
+          {
+            message:
+              "Já existe uma unidade com este nome. Você pode adicionar o franqueado à unidade existente.",
+          },
+          { status: 409 },
+        );
+      }
+    }
 
     // Unidade nova já nasce com sua pessoa principal (transição compatível:
     // unidades antigas receberam a pessoa via backfill da migration).

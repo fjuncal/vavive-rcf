@@ -69,3 +69,79 @@ export async function getMonthlyServiceCounts(franchiseeId: string) {
     select: monthlyServiceCountSelect,
   });
 }
+
+// Competência anterior (matemática pura em month/year, sem Date/timezone).
+export function previousCompetence(year: number, month: number) {
+  return month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
+}
+
+export const competenceQuerySchema = z.object({
+  year: strictInt(
+    MONTHLY_YEAR_MIN,
+    MONTHLY_YEAR_MAX,
+    `Ano inválido. Use um ano entre ${MONTHLY_YEAR_MIN} e ${MONTHLY_YEAR_MAX}.`,
+  ),
+  month: strictInt(1, 12, "Mês inválido. Use um mês entre 1 e 12."),
+});
+
+export type MonthlyOverviewRow = {
+  id: string;
+  name: string;
+  unitName: string;
+  memberNames: string[];
+  current: { id: string; count: number } | null;
+  previous: { count: number } | null;
+};
+
+// Visão consolidada: 4 queries em lote (sem N+1), merge em memória.
+// Só franquias ATIVAS; count = 0 é lançamento válido (null = sem lançamento).
+export async function getMonthlyOverview(year: number, month: number) {
+  const previous = previousCompetence(year, month);
+  const [franchisees, currentCounts, previousCounts, memberRows] =
+    await Promise.all([
+      prisma.franchisee.findMany({
+        where: { active: true },
+        orderBy: { unitName: "asc" },
+        select: { id: true, name: true, unitName: true },
+      }),
+      prisma.franchiseeMonthlyServiceCount.findMany({
+        where: { year, month },
+        select: { id: true, franchiseeId: true, count: true },
+      }),
+      prisma.franchiseeMonthlyServiceCount.findMany({
+        where: { year: previous.year, month: previous.month },
+        select: { franchiseeId: true, count: true },
+      }),
+      prisma.franchiseeMember.findMany({
+        where: { active: true },
+        select: { franchiseeId: true, name: true },
+        orderBy: { name: "asc" },
+      }),
+    ]);
+
+  const currentById = new Map(
+    currentCounts.map((item) => [
+      item.franchiseeId,
+      { id: item.id, count: item.count },
+    ]),
+  );
+  const previousById = new Map(
+    previousCounts.map((item) => [item.franchiseeId, { count: item.count }]),
+  );
+  const membersById = new Map<string, string[]>();
+  for (const member of memberRows) {
+    const list = membersById.get(member.franchiseeId) ?? [];
+    list.push(member.name);
+    membersById.set(member.franchiseeId, list);
+  }
+
+  const rows: MonthlyOverviewRow[] = franchisees.map((franchisee) => ({
+    id: franchisee.id,
+    name: franchisee.name,
+    unitName: franchisee.unitName,
+    memberNames: membersById.get(franchisee.id) ?? [],
+    current: currentById.get(franchisee.id) ?? null,
+    previous: previousById.get(franchisee.id) ?? null,
+  }));
+  return { year, month, previousYear: previous.year, previousMonth: previous.month, rows };
+}
