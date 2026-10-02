@@ -5,23 +5,38 @@ import { prisma } from "@/lib/db";
 import { civilDateToUTCDate, isValidCivilDate } from "@/lib/utils";
 import { monthlyServiceCountInputSchema } from "@/services/monthly-service-counts";
 
+const photoUrlField = z.preprocess(
+  (value) => (value === "" ? null : value),
+  z
+    .string("URL da foto inválida.")
+    .url("URL da foto inválida.")
+    .nullable()
+    .optional(),
+);
+
 const schema = z.object({
-  name: z.string().min(2),
-  unitName: z.string().min(2),
-  photoUrl: z.string().url().optional().or(z.literal("")),
-  moment: z.enum(["IMPLANTACAO", "INAUGURADA"]),
-  active: z.boolean().default(true),
+  name: z.string("Nome é obrigatório.").min(2, "Nome é obrigatório."),
+  unitName: z
+    .string("Nome da unidade é obrigatório.")
+    .min(2, "Nome da unidade é obrigatório."),
+  photoUrl: photoUrlField,
+  moment: z.enum(["IMPLANTACAO", "INAUGURADA"], "Momento da unidade inválido."),
+  active: z.boolean("Status da unidade inválido.").default(true),
 });
 
 // Datas civis da unidade (YYYY-MM-DD, opcionais, "" = limpar).
 // Somente SUPERADMIN pode enviá-las (validado no handler, não só no front).
-const civilDateField = z
-  .string()
-  .refine((value) => value === "" || isValidCivilDate(value), {
-    message: "Informe uma data válida (AAAA-MM-DD).",
-  })
-  .optional()
-  .or(z.literal(""));
+function civilDateField(label: string) {
+  const message = `${label} inválida.`;
+  return z.preprocess(
+    (value) => (value === "" ? null : value),
+    z
+      .string(message)
+      .refine(isValidCivilDate, { message })
+      .nullable()
+      .optional(),
+  );
+}
 
 // Lançamento mensal opcional no cadastro (SUPERADMIN): cria a franquia e o
 // registro de atendimentos do mês/ano na MESMA transação (rollback conjunto).
@@ -31,8 +46,8 @@ const initialMonthlySchema = z
 
 const schemaWithDates = schema
   .extend({
-    joinedNetworkAt: civilDateField,
-    inauguratedAt: civilDateField,
+    joinedNetworkAt: civilDateField("Data de entrada na rede"),
+    inauguratedAt: civilDateField("Data de inauguração"),
   })
   .superRefine((value, context) => {
     if (
@@ -79,8 +94,28 @@ function hasMonthlyCountKey(body: unknown) {
   );
 }
 
-function toNullableDate(value: string | undefined): Date | null {
+function toNullableDate(value: string | null | undefined): Date | null {
   return value ? civilDateToUTCDate(value) : null;
+}
+
+const validationFieldMessages: Record<string, string> = {
+  name: "Nome é obrigatório.",
+  unitName: "Nome da unidade é obrigatório.",
+  photoUrl: "URL da foto inválida.",
+  moment: "Momento da unidade inválido.",
+  active: "Status da unidade inválido.",
+  joinedNetworkAt: "Data de entrada na rede inválida.",
+  inauguratedAt: "Data de inauguração inválida.",
+};
+
+function validationMessage(error: z.ZodError) {
+  const issue = error.issues[0];
+  if (issue?.message && !issue.message.startsWith("Invalid input"))
+    return issue.message;
+  const field = issue?.path[0];
+  if (typeof field === "string" && validationFieldMessages[field])
+    return validationFieldMessages[field];
+  return "Dados inválidos.";
 }
 
 export async function GET() {
@@ -199,7 +234,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { message: error.issues[0]?.message || "Dados inválidos." },
+        { message: validationMessage(error) },
         { status: 400 },
       );
     }
@@ -258,7 +293,7 @@ export async function PUT(request: Request) {
   } catch (error) {
     if (error instanceof z.ZodError)
       return NextResponse.json(
-        { message: error.issues[0]?.message },
+        { message: validationMessage(error) },
         { status: 400 },
       );
     return NextResponse.json(
