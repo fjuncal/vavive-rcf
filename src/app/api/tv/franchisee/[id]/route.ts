@@ -65,6 +65,7 @@ export async function GET(
           photoUrl: true,
           moment: true,
           createdAt: true,
+          joinedNetworkAt: true,
         },
       }),
       prisma.contact.groupBy({

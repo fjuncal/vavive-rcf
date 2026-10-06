@@ -28,6 +28,13 @@ import {
   UnitPhotos,
   type UnitMember,
 } from "@/components/tv/unit-members";
+import {
+  getImplementationDeadlineStatus,
+  getTodayCivilDate,
+  IMPLEMENTATION_DEADLINE_STATUS_LABELS,
+  nonNegativeCivilDayDifference,
+  type ImplementationDeadlineStatus,
+} from "@/lib/utils";
 
 type Franchisee = TVFranchisee & {
   moment: "IMPLANTACAO" | "INAUGURADA";
@@ -44,6 +51,7 @@ type Franchisee = TVFranchisee & {
   attention: ContactAttention;
   hasContact: boolean;
   members: UnitMember[];
+  joinedNetworkAt: string | null;
   registeredInteractions?: number;
   manualAdjustments?: number;
   totalInteractions?: number;
@@ -62,6 +70,12 @@ type TVData = {
     totalFranchisees: number;
   };
   franchisees: Franchisee[];
+};
+
+const implementationStatusClass: Record<ImplementationDeadlineStatus, string> = {
+  within_deadline: "border-emerald-200/30 bg-emerald-300/15 text-emerald-50",
+  overdue: "border-rose-200/40 bg-rose-400/20 text-rose-50",
+  unknown: "border-white/20 bg-white/10 text-white/75",
 };
 const empty: TVData = {
   periodLabel: "",
@@ -189,6 +203,16 @@ export default function TVPage() {
   const currentAttention = current
     ? CONTACT_ATTENTION_CONFIG[current.attention]
     : CONTACT_ATTENTION_CONFIG.em_dia;
+  const implementationDays =
+    current?.moment === "IMPLANTACAO"
+      ? nonNegativeCivilDayDifference(
+          current.joinedNetworkAt,
+          getTodayCivilDate(),
+        )
+      : null;
+  const implementationDeadlineStatus = getImplementationDeadlineStatus(
+    implementationDays,
+  );
   const refresh = useCallback(async () => {
     try {
       const response = await fetch("/api/tv?period=" + period, {
@@ -483,12 +507,33 @@ export default function TVPage() {
                     fallbackPhoto={current.photoUrl}
                   />
                   <div className="text-white">
-                    <p className="flex items-center gap-2 text-base font-extrabold uppercase tracking-[.22em] text-[#b8ee35]">
-                      <Sparkles className="h-5 w-5" />
-                      {current.moment === "INAUGURADA"
-                        ? "Inaugurada"
-                        : "Em implantação"}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <p className="flex items-center gap-2 text-base font-extrabold uppercase tracking-[.22em] text-[#b8ee35]">
+                        <Sparkles className="h-5 w-5" />
+                        {current.moment === "INAUGURADA"
+                          ? "Inaugurada"
+                          : "Em implantação"}
+                      </p>
+                      {current.moment === "IMPLANTACAO" ? (
+                        <>
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-sm font-semibold text-white/90">
+                            <Clock3 className="h-4 w-4 text-[#b8ee35]" />
+                            {implementationDays === null
+                              ? current.joinedNetworkAt
+                                ? "Data de entrada inválida"
+                                : "Entrada na rede não informada"
+                              : `Em implantação há ${implementationDays} ${implementationDays === 1 ? "dia" : "dias"}`}
+                          </span>
+                          {implementationDays !== null ? (
+                            <span
+                              className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${implementationStatusClass[implementationDeadlineStatus]}`}
+                            >
+                              {IMPLEMENTATION_DEADLINE_STATUS_LABELS[implementationDeadlineStatus]}
+                            </span>
+                          ) : null}
+                        </>
+                      ) : null}
+                    </div>
                     <h2 className="mt-3 truncate text-5xl font-semibold leading-none xl:text-6xl">
                       <UnitNames
                         members={current.members}

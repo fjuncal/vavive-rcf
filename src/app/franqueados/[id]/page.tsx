@@ -1,7 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft, ChevronRight, MessageSquarePlus } from "lucide-react";
-import { formatCivilDate, formatDateTime } from "@/lib/utils";
+import {
+  formatCivilDate,
+  formatDateTime,
+  getImplementationDeadlineStatus,
+  getTodayCivilDate,
+  IMPLEMENTATION_DEADLINE_STATUS_LABELS,
+  nonNegativeCivilDayDifference,
+} from "@/lib/utils";
 import { prisma } from "@/lib/db";
 import { FRANCHISE_MOMENT_LABELS, CONTACT_TYPE_LABELS } from "@/lib/constants";
 import { getSessionUser, hasAnyRole, OPERATIONS_ROLES } from "@/services/auth";
@@ -56,6 +63,24 @@ export default async function FranchiseeDetailPage({
   const isSuperAdmin = sessionUser?.role === "SUPERADMIN";
   const canManageMembers =
     !!sessionUser && hasAnyRole(sessionUser, OPERATIONS_ROLES);
+  const todayCivilDate = getTodayCivilDate();
+  const implementationDays =
+    franchisee.moment === "IMPLANTACAO"
+      ? nonNegativeCivilDayDifference(
+          franchisee.joinedNetworkAt,
+          todayCivilDate,
+        )
+      : null;
+  const implementationDeadlineStatus = getImplementationDeadlineStatus(
+    implementationDays,
+  );
+  const inaugurationDays =
+    franchisee.moment === "INAUGURADA"
+      ? nonNegativeCivilDayDifference(
+          franchisee.joinedNetworkAt,
+          franchisee.inauguratedAt,
+        )
+      : null;
   // Total derivado: registros reais (Contact) + SUM(ajustes manuais).
   // Ajustes NÃO alteram último contato, status, nem freshness/attention.
   // Por canal: Contacts do tipo + ajustes do mesmo tipo (legados só no total).
@@ -178,19 +203,59 @@ export default async function FranchiseeDetailPage({
                 {franchisee.active ? "Ativo" : "Inativo"}
               </span>
             </div>
-            <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-slate-600">
-              <span>
-                Entrada na rede:{" "}
-                <b className="text-slate-900">
+            <div className="mt-4 grid gap-3 text-sm text-slate-600 sm:grid-cols-2">
+              <div className="rounded-xl bg-slate-50 px-3 py-2.5">
+                <p className="text-xs uppercase tracking-[.14em] text-slate-500">
+                  Entrada na rede
+                </p>
+                <p className="mt-1 font-semibold text-slate-900">
                   {formatCivilDate(franchisee.joinedNetworkAt) || "Não informada"}
-                </b>
-              </span>
-              <span>
-                Inauguração:{" "}
-                <b className="text-slate-900">
-                  {formatCivilDate(franchisee.inauguratedAt) || "Não informada"}
-                </b>
-              </span>
+                </p>
+              </div>
+              {franchisee.moment === "IMPLANTACAO" ? (
+                <div className="rounded-xl bg-[#eef7ef] px-3 py-2.5">
+                  <p className="text-xs uppercase tracking-[.14em] text-[#0b8f45]">
+                    Tempo em implantação
+                  </p>
+                  <p className="mt-1 font-semibold text-slate-900">
+                    {implementationDays === null
+                      ? franchisee.joinedNetworkAt
+                        ? "Data de entrada inválida"
+                        : "Data de entrada não informada"
+                      : `${implementationDays} ${implementationDays === 1 ? "dia" : "dias"}`}
+                  </p>
+                  {implementationDeadlineStatus !== "unknown" ? (
+                    <span
+                      className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${implementationDeadlineStatus === "overdue" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}
+                    >
+                      {IMPLEMENTATION_DEADLINE_STATUS_LABELS[implementationDeadlineStatus]}
+                    </span>
+                  ) : null}
+                </div>
+              ) : (
+                <>
+                  <div className="rounded-xl bg-slate-50 px-3 py-2.5">
+                    <p className="text-xs uppercase tracking-[.14em] text-slate-500">
+                      Data de inauguração
+                    </p>
+                    <p className="mt-1 font-semibold text-slate-900">
+                      {formatCivilDate(franchisee.inauguratedAt) || "Não informada"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-[#eef7ef] px-3 py-2.5">
+                    <p className="text-xs uppercase tracking-[.14em] text-[#0b8f45]">
+                      Tempo até inauguração
+                    </p>
+                    <p className="mt-1 font-semibold text-slate-900">
+                      {inaugurationDays === null
+                        ? franchisee.joinedNetworkAt && franchisee.inauguratedAt
+                          ? "Datas inconsistentes"
+                          : "Não calculado"
+                        : `${inaugurationDays} ${inaugurationDays === 1 ? "dia" : "dias"}`}
+                    </p>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

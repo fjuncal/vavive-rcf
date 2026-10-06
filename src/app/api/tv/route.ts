@@ -67,6 +67,7 @@ export async function GET(request: NextRequest) {
       photoUrl: true,
       moment: true,
       createdAt: true,
+      joinedNetworkAt: true,
     },
   });
   const ids = franchisees.map((item) => item.id);
@@ -243,6 +244,7 @@ export async function GET(request: NextRequest) {
           : null,
         hasContact: latest != null,
         daysWithoutContact,
+        joinedNetworkAt: franchisee.joinedNetworkAt?.toISOString() ?? null,
         attention: getContactAttention(daysWithoutContact, franchisee.moment),
         members: membersByFranchisee.get(franchisee.id) ?? [],
       };

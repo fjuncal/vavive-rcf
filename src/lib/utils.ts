@@ -95,3 +95,76 @@ export function civilDateToUTCDate(value: string): Date {
     Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])),
   );
 }
+
+/** Retorna data civil atual no fuso usado pela operaÃ§Ã£o da Central. */
+export function getTodayCivilDate(): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const value = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value]),
+  );
+  return `${value.year}-${value.month}-${value.day}`;
+}
+
+/** DiferenÃ§a entre duas datas civis, sem depender de hora ou fuso local. */
+export function differenceInCivilDays(
+  start: Date | string | null | undefined,
+  end: Date | string | null | undefined,
+): number | null {
+  const startDate = start ? toUTCDate(start) : null;
+  const endDate = end ? toUTCDate(end) : null;
+  if (!startDate || !endDate) return null;
+  return Math.round(
+    (Date.UTC(
+      endDate.getUTCFullYear(),
+      endDate.getUTCMonth(),
+      endDate.getUTCDate(),
+    ) -
+      Date.UTC(
+        startDate.getUTCFullYear(),
+        startDate.getUTCMonth(),
+        startDate.getUTCDate(),
+      )) /
+      86_400_000,
+  );
+}
+
+/** DiferenÃ§a civil vÃ¡lida para exibiÃ§Ã£o; datas futuras/invertidas viram null. */
+export function nonNegativeCivilDayDifference(
+  start: Date | string | null | undefined,
+  end: Date | string | null | undefined,
+): number | null {
+  const days = differenceInCivilDays(start, end);
+  return days !== null && days >= 0 ? days : null;
+}
+
+export const IMPLEMENTATION_DEADLINE_DAYS = 30;
+
+export type ImplementationDeadlineStatus =
+  | "within_deadline"
+  | "overdue"
+  | "unknown";
+
+export const IMPLEMENTATION_DEADLINE_STATUS_LABELS: Record<
+  ImplementationDeadlineStatus,
+  string
+> = {
+  within_deadline: "Dentro do prazo",
+  overdue: "Fora do prazo",
+  unknown: "Sem classificação",
+};
+
+export function getImplementationDeadlineStatus(
+  days: number | null | undefined,
+): ImplementationDeadlineStatus {
+  if (days === null || days === undefined || days < 0) return "unknown";
+  return days <= IMPLEMENTATION_DEADLINE_DAYS
+    ? "within_deadline"
+    : "overdue";
+}
