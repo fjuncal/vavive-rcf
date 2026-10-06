@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { photoUrlSchema } from "@/domain/franchisee";
 import { prisma } from "@/lib/db";
 import {
   getSessionUser,
@@ -17,7 +18,7 @@ const memberSelect = {
 
 const memberSchema = z.object({
   name: z.string().trim().min(2, "Informe o nome da pessoa."),
-  photoUrl: z.string().url("URL da foto inválida").optional().or(z.literal("")),
+  photoUrl: photoUrlSchema,
   active: z.boolean().default(true),
 });
 

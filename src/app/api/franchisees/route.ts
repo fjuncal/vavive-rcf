@@ -4,22 +4,14 @@ import { OPERATIONS_ROLES, requireAnyRole } from "@/services/auth";
 import { prisma } from "@/lib/db";
 import { civilDateToUTCDate, isValidCivilDate } from "@/lib/utils";
 import { monthlyServiceCountInputSchema } from "@/services/monthly-service-counts";
-
-const photoUrlField = z.preprocess(
-  (value) => (value === "" ? null : value),
-  z
-    .string("URL da foto inválida.")
-    .url("URL da foto inválida.")
-    .nullable()
-    .optional(),
-);
+import { photoUrlSchema } from "@/domain/franchisee";
 
 const schema = z.object({
   name: z.string("Nome é obrigatório.").min(2, "Nome é obrigatório."),
   unitName: z
     .string("Nome da unidade é obrigatório.")
     .min(2, "Nome da unidade é obrigatório."),
-  photoUrl: photoUrlField,
+  photoUrl: photoUrlSchema,
   moment: z.enum(["IMPLANTACAO", "INAUGURADA"], "Momento da unidade inválido."),
   active: z.boolean("Status da unidade inválido.").default(true),
 });
