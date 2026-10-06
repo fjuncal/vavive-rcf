@@ -59,6 +59,26 @@ textarea {
   min-height: 0;
 }
 
+.tv-primary-card img.tv-member-photo--one {
+  max-height: min(54vh, 580px);
+}
+
+.tv-primary-card img.tv-member-photo--two {
+  max-height: min(52vh, 540px);
+}
+
+.tv-primary-card img.tv-member-photo--three {
+  max-height: min(38vh, 400px);
+}
+
+.tv-primary-card img.tv-member-photo--four {
+  max-height: min(28vh, 280px);
+}
+
+.tv-primary-card img.tv-member-photo--compact {
+  max-height: min(28vh, 300px);
+}
+
 @media (max-height: 900px) {
   .tv-shell {
     padding-block: 0.75rem;
@@ -69,8 +89,20 @@ textarea {
   .tv-primary-card {
     padding: 1rem;
   }
-  .tv-primary-card img {
+  .tv-primary-card img.tv-member-photo--one {
     max-height: min(46vh, 430px);
+  }
+  .tv-primary-card img.tv-member-photo--two {
+    max-height: min(46vh, 400px);
+  }
+  .tv-primary-card img.tv-member-photo--three {
+    max-height: min(34vh, 300px);
+  }
+  .tv-primary-card img.tv-member-photo--four {
+    max-height: min(28vh, 240px);
+  }
+  .tv-primary-card img.tv-member-photo--compact {
+    max-height: min(38vh, 330px);
   }
   .tv-primary-card h2 {
     font-size: clamp(2.5rem, 5vw, 4.5rem);
@@ -90,8 +122,20 @@ textarea {
   .tv-primary-card {
     padding: 0.75rem;
   }
-  .tv-primary-card img {
+  .tv-primary-card img.tv-member-photo--one {
     max-height: min(38vh, 330px);
+  }
+  .tv-primary-card img.tv-member-photo--two {
+    max-height: min(42vh, 300px);
+  }
+  .tv-primary-card img.tv-member-photo--three {
+    max-height: min(30vh, 230px);
+  }
+  .tv-primary-card img.tv-member-photo--four {
+    max-height: min(24vh, 200px);
+  }
+  .tv-primary-card img.tv-member-photo--compact {
+    max-height: min(28vh, 220px);
   }
   .tv-primary-card h2 {
     font-size: clamp(2rem, 4.5vw, 3.5rem);

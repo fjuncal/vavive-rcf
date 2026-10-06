@@ -81,21 +81,33 @@ export function UnitPhotos({
         <img
           src={srcOf(list[0])}
           alt={list[0].name}
-          className="mx-auto aspect-[4/5] max-h-[min(54vh,580px)] w-full max-w-sm rounded-[28px] object-cover shadow-2xl"
+          className="tv-member-photo tv-member-photo--one mx-auto aspect-[4/5] w-full max-w-sm rounded-[28px] object-cover shadow-2xl"
         />
       );
     }
     if (list.length === 2) {
       return (
-        <div className="grid min-w-0 grid-cols-2 gap-3">
+        <div className="grid min-w-0 grid-cols-2 gap-4">
           {list.map((item) => (
-            <img
-              key={item.id}
-              src={srcOf(item)}
-              alt={item.name}
-              title={item.name}
-              className="aspect-[3/4] max-h-[min(40vh,420px)] w-full rounded-[24px] object-cover shadow-2xl"
-            />
+            <HeroMemberTile key={item.id} item={item} size="two" />
+          ))}
+        </div>
+      );
+    }
+    if (list.length === 3) {
+      return (
+        <div className="grid min-w-0 grid-cols-3 gap-3">
+          {list.map((item) => (
+            <HeroMemberTile key={item.id} item={item} size="three" />
+          ))}
+        </div>
+      );
+    }
+    if (list.length === 4) {
+      return (
+        <div className="grid min-w-0 grid-cols-2 gap-4">
+          {list.map((item) => (
+            <HeroMemberTile key={item.id} item={item} size="four" />
           ))}
         </div>
       );
@@ -110,7 +122,7 @@ export function UnitPhotos({
               src={srcOf(item)}
               alt={item.name}
               title={list.map((m) => m.name).join(", ")}
-              className="aspect-square max-h-[min(28vh,300px)] w-full rounded-[20px] object-cover shadow-2xl"
+              className="tv-member-photo tv-member-photo--compact aspect-square w-full rounded-[20px] object-cover shadow-2xl"
             />
             {extra > 0 && index === shown.length - 1 ? (
               <span className="absolute inset-0 flex items-center justify-center rounded-[20px] bg-[#003b71]/70 text-3xl font-bold text-white">
@@ -146,5 +158,41 @@ export function UnitPhotos({
         </span>
       ) : null}
     </span>
+  );
+}
+
+function HeroMemberTile({
+  item,
+  size,
+}: {
+  item: UnitMember;
+  size: "two" | "three" | "four";
+}) {
+  const photoClass =
+    size === "two"
+      ? "tv-member-photo--two aspect-[4/5] rounded-[24px]"
+      : size === "three"
+        ? "tv-member-photo--three aspect-[4/5] rounded-[20px]"
+        : "tv-member-photo--four aspect-square rounded-[20px]";
+  const nameClass =
+    size === "two"
+      ? "text-[clamp(1.05rem,1.8vw,1.5rem)]"
+      : "text-[clamp(0.9rem,1.35vw,1.2rem)]";
+
+  return (
+    <figure className="min-w-0 text-center">
+      <img
+        src={item.photoUrl || FALLBACK_PHOTO}
+        alt={item.name}
+        title={item.name}
+        className={`tv-member-photo w-full object-cover shadow-2xl ${photoClass}`}
+      />
+      <figcaption
+        title={item.name}
+        className={`mt-2 truncate font-bold leading-tight text-white ${nameClass}`}
+      >
+        {item.name}
+      </figcaption>
+    </figure>
   );
 }
