@@ -28,6 +28,8 @@ import {
   type UnitMember,
 } from "@/components/tv/unit-members";
 import { VaviveLogo } from "@/components/brand/vavive-logo";
+import { BirthdayHighlights, UnitBirthdayBadge } from "@/components/tv/birthday-highlights";
+import type { TVBirthday } from "@/components/tv/birthday-types";
 
 type Slots = 2 | 4;
 type TVPeriod =
@@ -57,9 +59,10 @@ type Franchisee = TVFranchisee & {
 type TVData = {
   periodLabel: string;
   franchisees: Franchisee[];
+  birthdays: TVBirthday[];
 };
 
-const empty: TVData = { periodLabel: "", franchisees: [] };
+const empty: TVData = { periodLabel: "", franchisees: [], birthdays: [] };
 
 function contactKey(type: ContactChannel) {
   if (type === "VIDEO_CHAMADA") return "video";
@@ -270,18 +273,23 @@ export function TVMultiCarousel({ slots }: { slots: Slots }) {
         </section>
 
         {visible.length ? (
-          <section
-            className={`grid min-h-0 flex-1 gap-5 ${slots === 2 ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1 md:grid-cols-2 md:grid-rows-2"}`}
-          >
-            {visible.map((franchisee) => (
-              <FranchiseeCard
-                key={franchisee.id}
-                franchisee={franchisee}
-                compact={slots === 4}
-                onSaved={registerInstantly}
-                onUndone={() => void refresh()}
-              />
-            ))}
+          <section className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(220px,270px)]">
+            <div
+              className={`order-2 grid min-h-0 min-w-0 gap-5 xl:order-1 ${slots === 2 ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1 md:grid-cols-[repeat(2,minmax(0,1fr))] md:grid-rows-[repeat(2,minmax(0,1fr))]"}`}
+            >
+              {visible.map((franchisee) => (
+                <FranchiseeCard
+                  key={franchisee.id}
+                  franchisee={franchisee}
+                  compact={slots === 4}
+                  onSaved={registerInstantly}
+                  onUndone={() => void refresh()}
+                />
+              ))}
+            </div>
+            <aside className="order-1 flex min-h-0 min-w-0 max-h-28 flex-col overflow-y-auto xl:order-2 xl:max-h-none xl:overflow-hidden">
+              <BirthdayHighlights birthdays={data.birthdays} compact sidebar fill />
+            </aside>
           </section>
         ) : (
           <section className="flex flex-1 items-center justify-center rounded-3xl bg-[#003b71] text-white">
@@ -328,15 +336,15 @@ function FranchiseeCard({
   const attention = CONTACT_ATTENTION_CONFIG[franchisee.attention];
   return (
     <article
-      className={`flex min-h-0 flex-col overflow-hidden rounded-[28px] border-2 text-white shadow-xl ${compact ? "p-3" : "p-6"} ${attention.surfaceClass} ${attention.carouselClass}`}
+      className={`tv-multi-card ${compact ? "tv-multi-card--compact" : ""} flex min-h-0 min-w-0 flex-col rounded-[28px] border-2 text-white shadow-xl ${compact ? "overflow-visible p-3" : "overflow-hidden p-6"} ${attention.surfaceClass} ${attention.carouselClass}`}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="tv-multi-header flex min-w-0 items-start justify-between gap-3">
         <span
           className={`rounded-full font-extrabold ${compact ? "px-2.5 py-1 text-[10px]" : "px-3 py-1.5 text-xs"} ${attention.tagClass}`}
         >
           {attention.emoji} {attention.label}
         </span>
-        <span className="text-right text-xs font-semibold text-white/75">
+        <span className={`text-right text-xs font-semibold text-white/75 ${compact ? "max-w-[48%] min-w-0 truncate" : ""}`}>
           {franchisee.daysWithoutContact === null
             ? "Sem contato"
             : !franchisee.hasContact
@@ -347,18 +355,18 @@ function FranchiseeCard({
         </span>
       </div>
       <div
-        className={`flex min-w-0 items-center ${compact ? "mt-3 gap-3" : "mt-5 gap-4 lg:gap-5"}`}
+        className={`tv-multi-member flex min-w-0 items-center ${compact ? "mt-3 gap-3" : "mt-5 gap-4 lg:gap-5"}`}
       >
         <UnitPhotos
           layout="avatar"
-          avatarClassName={compact ? "h-14 w-14" : "h-28 w-28"}
+          avatarClassName={compact ? "tv-multi-card-avatar h-14 w-14" : "h-28 w-28"}
           members={franchisee.members}
           fallbackName={franchisee.name}
           fallbackPhoto={franchisee.photoUrl}
         />
-        <div className="min-w-0">
+        <div className="tv-multi-member-copy min-w-0">
           <p
-            className={`flex items-center gap-2 font-extrabold uppercase tracking-[.16em] text-[#b8ee35] ${compact ? "text-[9px]" : "text-xs"}`}
+            className={`tv-multi-moment flex items-center gap-2 font-extrabold uppercase tracking-[.16em] text-[#b8ee35] ${compact ? "text-[9px]" : "text-xs"}`}
           >
             <Sparkles className="h-4 w-4" />
             {franchisee.moment === "INAUGURADA"
@@ -366,7 +374,7 @@ function FranchiseeCard({
               : "Em implantação"}
           </p>
           <h2
-            className={`truncate font-semibold leading-none ${compact ? "mt-1 text-xl" : "mt-2 text-4xl"}`}
+            className={`tv-multi-name truncate font-semibold leading-none ${compact ? "mt-1 text-xl" : "mt-2 text-4xl"}`}
           >
             <UnitNames
               members={franchisee.members}
@@ -374,14 +382,17 @@ function FranchiseeCard({
             />
           </h2>
           <p
-            className={`truncate text-white/70 ${compact ? "mt-1 text-sm" : "mt-2 text-xl"}`}
+            className={`tv-multi-unit truncate text-white/70 ${compact ? "mt-1 text-sm" : "mt-2 text-xl"}`}
           >
             {franchisee.unitName}
           </p>
+          <div className="tv-multi-birthday">
+            <UnitBirthdayBadge members={franchisee.members} compact />
+          </div>
         </div>
       </div>
       <div
-        className={`grid gap-2 ${compact ? "mt-3 grid-cols-4" : "mt-5 grid-cols-5"}`}
+        className={`tv-multi-stats grid gap-2 ${compact ? "mt-3 grid-cols-4" : "mt-5 grid-cols-5"}`}
       >
         <Stat label="WhatsApp" value={franchisee.whatsapp} />
         <Stat label="Telefone" value={franchisee.telefone} />
@@ -392,7 +403,7 @@ function FranchiseeCard({
         <Stat label="Live" value={franchisee.live} />
       </div>
       <div
-        className={`flex flex-wrap gap-2 rounded-xl border border-white/15 bg-white/10 text-xs ${compact ? "mt-2 px-2 py-1.5 text-[10px]" : "mt-3 px-3 py-2"}`}
+        className={`tv-multi-live flex rounded-xl border border-white/15 bg-white/10 text-xs ${compact ? "mt-2 flex-nowrap items-center justify-between gap-1 px-2 py-1.5 text-[10px]" : "mt-3 flex-wrap gap-2 px-3 py-2"}`}
       >
         <span className="font-semibold text-[#b8ee35]">Presença em Lives</span>
         <span>
@@ -400,7 +411,7 @@ function FranchiseeCard({
         </span>
         <span className="font-bold">{franchisee.liveAttendanceRate}%</span>
       </div>
-      <div className="mt-auto">
+      <div className={`tv-contact-actions min-w-0 shrink-0 ${compact ? "" : "mt-auto"}`}>
         <QuickContactButtons
           compact={compact}
           dense={compact}
@@ -415,7 +426,7 @@ function FranchiseeCard({
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <span className="rounded-xl border border-white/15 bg-white/10 px-2 py-2 text-center">
+    <span className="tv-multi-stat rounded-xl border border-white/15 bg-white/10 px-2 py-2 text-center">
       <b className="block text-lg leading-none">{value}</b>
       <small className="mt-1 block text-[10px] text-white/65">{label}</small>
     </span>

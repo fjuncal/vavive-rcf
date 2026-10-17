@@ -8,6 +8,7 @@ import {
   getTodayCivilDate,
   IMPLEMENTATION_DEADLINE_STATUS_LABELS,
   nonNegativeCivilDayDifference,
+  toDateInputValue,
 } from "@/lib/utils";
 import { prisma } from "@/lib/db";
 import { FRANCHISE_MOMENT_LABELS, CONTACT_TYPE_LABELS } from "@/lib/constants";
@@ -109,6 +110,7 @@ export default async function FranchiseeDetailPage({
             id: true,
             name: true,
             photoUrl: true,
+            birthDate: true,
             active: true,
             createdAt: true,
           },
@@ -267,6 +269,7 @@ export default async function FranchiseeDetailPage({
           id: item.id,
           name: item.name,
           photoUrl: item.photoUrl,
+          birthDate: toDateInputValue(item.birthDate) || null,
           active: item.active,
           createdAt: item.createdAt.toISOString(),
         }))}

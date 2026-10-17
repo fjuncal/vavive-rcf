@@ -143,6 +143,25 @@ export function QuickContactButtons({
       >
         Registrar comunicação
       </p>
+      {compact && dense ? (
+        <div className="flex min-h-[1.625rem] min-w-0 items-center">
+          {latest ? (
+            <div className="tv-history-compact w-full min-w-0 rounded-xl border border-white/15 bg-[#002f5a]/30 px-2 py-1.5">
+          <p
+            className="min-w-0 truncate text-[10px] leading-tight text-white/80"
+            title={`${labels[latest.type]} · ${latest.member?.name ?? "Unidade"} · ${date(latest.contactedAt)} · ${time(latest.contactedAt)}`}
+          >
+            <span className="font-bold uppercase tracking-[.12em] text-[#b8ee35]">
+              Último contato
+            </span>
+            {` · ${labels[latest.type]}`}
+            {latest.member ? ` · ${latest.member.name}` : ""}
+            {` · ${date(latest.contactedAt)} · ${time(latest.contactedAt)}`}
+          </p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       <div
         className={`grid grid-cols-5 gap-2 ${compact ? "text-[10px]" : "text-sm"}`}
       >
@@ -151,7 +170,7 @@ export function QuickContactButtons({
             key={type}
             disabled={Boolean(saving)}
             onClick={() => save(type)}
-            className={`flex items-center justify-center gap-1 rounded-xl border font-semibold transition disabled:opacity-70 ${dense ? "min-h-10 px-0.5 text-[10px]" : compact ? "min-h-10 px-1" : "min-h-14 gap-2 text-sm"} ${saved === type ? "border-[#b8ee35] bg-[#b8ee35] text-[#003b71]" : "border-white/20 bg-white/10 text-white"}`}
+            className={`flex items-center justify-center gap-1 rounded-xl border font-semibold transition disabled:opacity-70 ${dense ? "min-h-11 px-0.5 text-[10px]" : compact ? "min-h-10 px-1" : "min-h-14 gap-2 text-sm"} ${saved === type ? "border-[#b8ee35] bg-[#b8ee35] text-[#003b71]" : "border-white/20 bg-white/10 text-white"}`}
           >
             <Icon className="h-4 w-4" />
             {saving === type ? "Salvando..." : saved === type ? "Salvo" : label}
@@ -227,51 +246,7 @@ export function QuickContactButtons({
             </div>
           </div>
         </section>
-      ) : (
-        <section
-          className={`rounded-xl border border-white/15 bg-[#002f5a]/30 ${dense ? "mt-1 px-2 py-1.5" : "mt-2 px-3 py-2.5"}`}
-        >
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[#b8ee35]">
-              Histórico recente
-            </p>
-            {latest ? (
-              <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold text-white">
-                Último: {labels[latest.type]}
-              </span>
-            ) : null}
-          </div>
-          {history.length ? (
-            <div
-              className={`grid gap-x-3 text-[10px] ${dense ? "mt-1 grid-cols-1" : "mt-1.5 grid-cols-2"}`}
-            >
-              {history.slice(0, dense ? 1 : 2).map((item) => (
-                <div
-                  key={item.id}
-                  className="flex min-w-0 items-center justify-between gap-2 text-white/75"
-                >
-                  <span className="truncate font-semibold text-white">
-                    {labels[item.type]}
-                    {item.member ? (
-                      <span className="font-normal text-white/60">
-                        {" "}
-                        · {item.member.name}
-                      </span>
-                    ) : null}
-                  </span>
-                  <span className="shrink-0">
-                    {date(item.contactedAt)} · {time(item.contactedAt)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-1 text-[10px] text-white/55">
-              Nenhum contato registrado.
-            </p>
-          )}
-        </section>
-      )}
+      ) : null}
     </div>
   );
 }

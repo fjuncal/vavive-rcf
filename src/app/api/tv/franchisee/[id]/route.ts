@@ -7,6 +7,7 @@ import {
   getDaysWithoutContact,
 } from "@/lib/contact-attention";
 import { getInteractionBreakdown } from "@/services/interaction-adjustments";
+import { getBirthdayHighlights } from "@/domain/birthdays";
 
 type TVPeriod =
   | "last_7_days"
@@ -88,7 +89,7 @@ export async function GET(
       getInteractionBreakdown(id),
       prisma.franchiseeMember.findMany({
         where: { franchiseeId: id, active: true },
-        select: { id: true, name: true, photoUrl: true },
+        select: { id: true, name: true, photoUrl: true, birthDate: true },
         orderBy: { createdAt: "asc" },
       }),
     ]);
@@ -111,6 +112,19 @@ export async function GET(
   });
   const livesInvited = participations.length;
   const livesAttended = participations.filter((item) => item.attended).length;
+  const birthdays = getBirthdayHighlights(
+    members.map((member) => ({
+      memberId: member.id,
+      memberName: member.name,
+      photoUrl: member.photoUrl,
+      birthDate: member.birthDate,
+      franchiseeId: franchisee.id,
+      unitName: franchisee.unitName,
+    })),
+  );
+  const birthdayByMember = new Map(
+    birthdays.map((birthday) => [birthday.memberId, birthday]),
+  );
   return NextResponse.json({
     ...franchisee,
     whatsapp: effective("WHATSAPP"),
@@ -121,7 +135,18 @@ export async function GET(
     registeredInteractions: totals.registeredInteractions,
     manualAdjustments: totals.manualAdjustments,
     totalInteractions: totals.totalInteractions,
-    members,
+    members: members.map((member) => {
+      const birthday = birthdayByMember.get(member.id);
+      return {
+        id: member.id,
+        name: member.name,
+        photoUrl: member.photoUrl,
+        birthday: birthday
+          ? { day: birthday.day, month: birthday.month, status: birthday.status }
+          : null,
+      };
+    }),
+    birthdays,
     livesInvited,
     livesAttended,
     liveAttendanceRate: livesInvited

@@ -1,9 +1,12 @@
 "use client";
 
+import type { BirthdayMember } from "@/components/tv/birthday-types";
+
 export type UnitMember = {
   id: string;
   name: string;
   photoUrl?: string | null;
+  birthday?: BirthdayMember | null;
 };
 
 const FALLBACK_PHOTO =
@@ -81,7 +84,7 @@ export function UnitPhotos({
         <img
           src={srcOf(list[0])}
           alt={list[0].name}
-          className="tv-member-photo tv-member-photo--one mx-auto aspect-[4/5] w-full max-w-sm rounded-[28px] object-cover shadow-2xl"
+          className={`tv-member-photo tv-member-photo--one mx-auto aspect-[4/5] w-full max-w-sm rounded-[28px] object-cover shadow-2xl ${list[0].birthday?.status === "today" ? "ring-4 ring-[#f09a7d] ring-offset-4 ring-offset-[#003b71]" : ""}`}
         />
       );
     }
@@ -147,7 +150,7 @@ export function UnitPhotos({
           key={item.id}
           src={srcOf(item)}
           alt={item.name}
-          className={`${avatarClassName} rounded-2xl border-2 border-white/40 object-cover shadow-lg ${index > 0 ? "-ml-5" : ""}`}
+          className={`${avatarClassName} rounded-2xl border-2 border-white/40 object-cover shadow-lg ${item.birthday?.status === "today" ? "ring-2 ring-[#f09a7d] ring-offset-1" : ""} ${index > 0 ? "-ml-5" : ""}`}
         />
       ))}
       {extra > 0 ? (
@@ -180,13 +183,18 @@ function HeroMemberTile({
       : "text-[clamp(0.9rem,1.35vw,1.2rem)]";
 
   return (
-    <figure className="min-w-0 text-center">
+    <figure className={`relative min-w-0 text-center ${item.birthday?.status === "today" ? "rounded-[24px] bg-[#f09a7d]/20 p-1 ring-2 ring-[#f09a7d]" : ""}`}>
       <img
         src={item.photoUrl || FALLBACK_PHOTO}
         alt={item.name}
         title={item.name}
         className={`tv-member-photo w-full object-cover shadow-2xl ${photoClass}`}
       />
+      {item.birthday?.status === "today" ? (
+        <span className="absolute left-2 top-2 rounded-full bg-[#f09a7d] px-2 py-1 text-[10px] font-extrabold text-[#7f2d1d]">
+          Hoje
+        </span>
+      ) : null}
       <figcaption
         title={item.name}
         className={`mt-2 truncate font-bold leading-tight text-white ${nameClass}`}

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ImagePlus, LoaderCircle } from "lucide-react";
 import { FRANCHISE_MOMENT_LABELS, MONTH_LABELS } from "@/lib/constants";
+import { getTodayCivilDate } from "@/lib/utils";
 
 type Mode = "NEW" | "EXISTING";
 
@@ -29,6 +30,7 @@ export default function NewFranchiseePage() {
   // Campos comuns aos dois modos (foto + nome da pessoa).
   const [name, setName] = useState("");
   const [photoUrl, setPhotoUrl] = useState("");
+  const [birthDate, setBirthDate] = useState("");
 
   // Campos exclusivos do modo Nova unidade (fluxo atual preservado).
   const [unitName, setUnitName] = useState("");
@@ -170,6 +172,7 @@ export default function NewFranchiseePage() {
       name,
       unitName,
       photoUrl,
+      primaryMemberBirthDate: birthDate,
       moment,
       active,
     };
@@ -207,7 +210,7 @@ export default function NewFranchiseePage() {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, photoUrl }),
+        body: JSON.stringify({ name, photoUrl, birthDate }),
       },
     );
     const payload = await response.json().catch(() => ({}));
@@ -324,6 +327,17 @@ export default function NewFranchiseePage() {
               placeholder="Nome do novo franqueado"
               className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 font-normal"
               required
+            />
+          </label>
+
+          <label className="text-sm font-semibold text-slate-700">
+            Data de nascimento
+            <input
+              type="date"
+              value={birthDate}
+              max={getTodayCivilDate()}
+              onChange={(e) => setBirthDate(e.target.value)}
+              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 font-normal"
             />
           </label>
 

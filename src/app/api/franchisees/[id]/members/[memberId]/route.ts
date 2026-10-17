@@ -7,11 +7,14 @@ import {
   hasAnyRole,
   OPERATIONS_ROLES,
 } from "@/services/auth";
+import { birthDateSchema, birthDateToUTCDate } from "@/domain/birthdays";
+import { toDateInputValue } from "@/lib/utils";
 
 const memberSelect = {
   id: true,
   name: true,
   photoUrl: true,
+  birthDate: true,
   active: true,
   createdAt: true,
 } as const;
@@ -19,7 +22,19 @@ const memberSelect = {
 const memberUpdateSchema = z.object({
   name: z.string().trim().min(2, "Informe o nome da pessoa."),
   photoUrl: photoUrlSchema,
+  birthDate: birthDateSchema,
 });
+
+function serializeMember(member: {
+  id: string;
+  name: string;
+  photoUrl: string | null;
+  birthDate: Date | null;
+  active: boolean;
+  createdAt: Date;
+}) {
+  return { ...member, birthDate: toDateInputValue(member.birthDate) || null };
+}
 
 function validationMessage(error: z.ZodError) {
   return error.issues[0]?.message || "Dados inválidos.";
@@ -97,10 +112,16 @@ export async function PUT(
 
     return tx.franchiseeMember.update({
       where: { id: member.id },
-      data: { name: payload.name, photoUrl },
+      data: {
+        name: payload.name,
+        photoUrl,
+        ...(payload.birthDate !== undefined
+          ? { birthDate: birthDateToUTCDate(payload.birthDate) }
+          : {}),
+      },
       select: memberSelect,
     });
   });
 
-  return NextResponse.json(updatedMember);
+  return NextResponse.json(serializeMember(updatedMember));
 }

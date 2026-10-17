@@ -22,6 +22,8 @@ import {
   UnitPhotos,
   type UnitMember,
 } from "@/components/tv/unit-members";
+import { BirthdayHighlights, UnitBirthdayBadge } from "@/components/tv/birthday-highlights";
+import type { TVBirthday } from "@/components/tv/birthday-types";
 type Channel =
   "WHATSAPP" | "TELEFONE" | "VIDEO_CHAMADA" | "PRESENCIAL" | "LIVE";
 type Franchisee = {
@@ -42,6 +44,7 @@ type Franchisee = {
   attention: ContactAttention;
   hasContact: boolean;
   members: UnitMember[];
+  birthdays?: TVBirthday[];
 };
 type TVPeriod =
   | "last_7_days"
@@ -62,6 +65,7 @@ const key = (type: Channel) =>
     : (type.toLowerCase() as "whatsapp" | "telefone" | "presencial" | "live");
 export function TVListMode() {
   const [list, setList] = useState<Franchisee[]>([]);
+  const [birthdays, setBirthdays] = useState<TVBirthday[]>([]);
   const [target, setTarget] = useState<Franchisee | null>(null);
   const [saving, setSaving] = useState("");
   const [done, setDone] = useState("");
@@ -75,9 +79,29 @@ export function TVListMode() {
   } | null>(null);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    fetch("/api/tv?period=" + period, { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setList(d?.franchisees ?? []));
+    let alive = true;
+    const load = () =>
+      fetch("/api/tv?period=" + period, { cache: "no-store" })
+        .then((response) => {
+          if (response.status === 401) {
+            window.location.assign("/tv/login");
+            return null;
+          }
+          return response.ok ? response.json() : null;
+        })
+        .then((data) => {
+          if (alive) {
+            setList(data?.franchisees ?? []);
+            setBirthdays(data?.birthdays ?? []);
+          }
+        })
+        .catch(() => {});
+    void load();
+    const interval = window.setInterval(load, 60_000);
+    return () => {
+      alive = false;
+      window.clearInterval(interval);
+    };
   }, [period]);
   useEffect(() => {
     fetch("/api/auth/me")
@@ -219,28 +243,30 @@ export function TVListMode() {
             {list.length} unidades
           </b>
         </div>
-        <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm focus-within:border-[#0b8f45] focus-within:ring-4 focus-within:ring-[#0b8f45]/10">
-          <Search className="h-5 w-5 text-[#0b8f45]" />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Buscar franqueado ou unidade"
-            className="w-full bg-transparent text-base text-[#003b71] outline-none placeholder:text-slate-400"
-          />
-          {query && (
-            <button
-              type="button"
-              onClick={() => setQuery("")}
-              className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-bold text-slate-600"
+        <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(230px,290px)]">
+          <div className="order-2 flex min-h-0 min-w-0 flex-col gap-3 xl:order-1">
+            <label className="flex shrink-0 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm focus-within:border-[#0b8f45] focus-within:ring-4 focus-within:ring-[#0b8f45]/10">
+              <Search className="h-5 w-5 text-[#0b8f45]" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Buscar franqueado ou unidade"
+                className="w-full bg-transparent text-base text-[#003b71] outline-none placeholder:text-slate-400"
+              />
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-bold text-slate-600"
+                >
+                  Limpar
+                </button>
+              )}
+            </label>
+            <section
+              ref={box}
+              className="min-h-0 flex-1 overflow-y-auto rounded-[24px] border border-slate-200 bg-[#f8fbf8] p-3 shadow-xl"
             >
-              Limpar
-            </button>
-          )}
-        </label>
-        <section
-          ref={box}
-          className="min-h-0 flex-1 overflow-y-auto rounded-[24px] border border-slate-200 bg-[#f8fbf8] p-3 shadow-xl"
-        >
           <div className="space-y-2">
             {visible.map((item) => {
               const attention = CONTACT_ATTENTION_CONFIG[item.attention];
@@ -248,7 +274,7 @@ export function TVListMode() {
                 <article
                   key={item.id}
                   onClick={() => setTarget(item)}
-                  className={`group grid min-h-24 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 rounded-2xl border p-3.5 shadow-sm transition duration-200 hover:shadow-md ${attention.listClass} ${item.attention === "urgente" ? "animate-pulse" : ""}`}
+                  className={`group grid min-h-24 min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 rounded-2xl border p-3.5 shadow-sm transition duration-200 hover:shadow-md ${attention.listClass} ${item.attention === "urgente" ? "animate-pulse" : ""}`}
                 >
                   <UnitPhotos
                     layout="avatar"
@@ -259,7 +285,7 @@ export function TVListMode() {
                   />
                   <button className="min-w-0 text-left">
                     <div className="flex flex-wrap items-center gap-2">
-                      <b className="truncate text-lg text-[#003b71]">
+                      <b className="min-w-0 truncate text-lg text-[#003b71]">
                         <UnitNames
                           members={item.members}
                           fallbackName={item.name}
@@ -281,6 +307,7 @@ export function TVListMode() {
                     <span className="mt-1 block truncate text-sm text-slate-500">
                       {item.unitName}
                     </span>
+                    <UnitBirthdayBadge members={item.members} compact />
                     <span className="mt-1 block text-xs font-semibold text-slate-600">
                       {item.daysWithoutContact === null
                         ? "Sem contato registrado"
@@ -341,8 +368,13 @@ export function TVListMode() {
                 Nenhum franqueado encontrado.
               </div>
             )}
+              </div>
+            </section>
           </div>
-        </section>
+          <aside className="order-1 flex min-h-0 min-w-0 max-h-28 flex-col overflow-y-auto xl:order-2 xl:max-h-none xl:overflow-hidden">
+            <BirthdayHighlights birthdays={birthdays} compact sidebar fill />
+          </aside>
+        </div>
       </div>
       {undo && (
         <div className="fixed bottom-6 left-1/2 z-40 flex w-[min(92vw,560px)] -translate-x-1/2 items-center justify-between gap-4 rounded-2xl bg-[#003b71] px-5 py-4 text-white shadow-2xl">

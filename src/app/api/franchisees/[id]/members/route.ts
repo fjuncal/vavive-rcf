@@ -7,11 +7,14 @@ import {
   hasAnyRole,
   OPERATIONS_ROLES,
 } from "@/services/auth";
+import { birthDateSchema, birthDateToUTCDate } from "@/domain/birthdays";
+import { toDateInputValue } from "@/lib/utils";
 
 const memberSelect = {
   id: true,
   name: true,
   photoUrl: true,
+  birthDate: true,
   active: true,
   createdAt: true,
 } as const;
@@ -19,8 +22,20 @@ const memberSelect = {
 const memberSchema = z.object({
   name: z.string().trim().min(2, "Informe o nome da pessoa."),
   photoUrl: photoUrlSchema,
+  birthDate: birthDateSchema,
   active: z.boolean().default(true),
 });
+
+function serializeMember(member: {
+  id: string;
+  name: string;
+  photoUrl: string | null;
+  birthDate: Date | null;
+  active: boolean;
+  createdAt: Date;
+}) {
+  return { ...member, birthDate: toDateInputValue(member.birthDate) || null };
+}
 
 async function getUnit(id: string) {
   return prisma.franchisee.findUnique({
@@ -58,7 +73,7 @@ export async function GET(
     orderBy: { createdAt: "asc" },
     select: memberSelect,
   });
-  return NextResponse.json(members);
+  return NextResponse.json(members.map(serializeMember));
 }
 
 export async function POST(
@@ -104,9 +119,12 @@ export async function POST(
       franchiseeId: id,
       name: payload.name,
       photoUrl: payload.photoUrl || null,
+      ...(payload.birthDate !== undefined
+        ? { birthDate: birthDateToUTCDate(payload.birthDate) }
+        : {}),
       active: payload.active,
     },
     select: memberSelect,
   });
-  return NextResponse.json(member, { status: 201 });
+  return NextResponse.json(serializeMember(member), { status: 201 });
 }

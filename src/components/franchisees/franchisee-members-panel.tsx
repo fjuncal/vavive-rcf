@@ -9,11 +9,13 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { formatCivilDate, getTodayCivilDate } from "@/lib/utils";
 
 export type UnitMemberItem = {
   id: string;
   name: string;
   photoUrl: string | null;
+  birthDate: string | null;
   active: boolean;
   createdAt: string;
 };
@@ -58,6 +60,7 @@ function EditMemberDialog({
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(member.name);
   const [photoUrl, setPhotoUrl] = useState(member.photoUrl ?? "");
+  const [birthDate, setBirthDate] = useState(member.birthDate ?? "");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
@@ -74,6 +77,7 @@ function EditMemberDialog({
   function reset() {
     setName(member.name);
     setPhotoUrl(member.photoUrl ?? "");
+    setBirthDate(member.birthDate ?? "");
     setError("");
   }
 
@@ -117,7 +121,7 @@ function EditMemberDialog({
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, photoUrl }),
+          body: JSON.stringify({ name, photoUrl, birthDate }),
         },
       );
       const payload = await response.json().catch(() => ({}));
@@ -225,6 +229,17 @@ function EditMemberDialog({
                 />
               </label>
 
+              <label className="block text-sm font-semibold text-slate-700">
+                Data de nascimento
+                <input
+                  type="date"
+                  value={birthDate}
+                  max={getTodayCivilDate()}
+                  onChange={(event) => setBirthDate(event.target.value)}
+                  className={`${inputClass} mt-2 bg-white`}
+                />
+              </label>
+
               {error ? (
                 <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                   {error}
@@ -276,6 +291,7 @@ export function FranchiseeMembersPanel({
   const [members, setMembers] = useState(initialMembers);
   const [name, setName] = useState("");
   const [photoUrl, setPhotoUrl] = useState("");
+  const [birthDate, setBirthDate] = useState("");
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{
     type: "error" | "success";
@@ -292,7 +308,7 @@ export function FranchiseeMembersPanel({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, photoUrl }),
+          body: JSON.stringify({ name, photoUrl, birthDate }),
         },
       );
       const payload = await response.json().catch(() => ({}));
@@ -304,6 +320,7 @@ export function FranchiseeMembersPanel({
       setMembers((current) => [...current, payload]);
       setName("");
       setPhotoUrl("");
+      setBirthDate("");
       setFeedback({
         type: "success",
         text: `${payload.name} agora faz parte desta unidade.`,
@@ -353,6 +370,11 @@ export function FranchiseeMembersPanel({
                 {index === 0 ? (
                   <span className="rounded-full bg-[#1f5d8c]/10 px-2 py-0.5 font-bold text-[#1f5d8c]">
                     Principal
+                  </span>
+                ) : null}
+                {member.birthDate ? (
+                  <span className="rounded-full bg-[#0b8f45]/10 px-2 py-0.5 font-semibold text-[#0b8f45]">
+                    Aniversário: {formatCivilDate(member.birthDate)}
                   </span>
                 ) : null}
                 {!member.active ? (
@@ -424,6 +446,16 @@ export function FranchiseeMembersPanel({
                 value={photoUrl}
                 onChange={(event) => setPhotoUrl(event.target.value)}
                 placeholder="https://..."
+                className={`${inputClass} mt-2`}
+              />
+            </label>
+            <label className="block text-sm font-medium text-slate-700">
+              Data de nascimento
+              <input
+                type="date"
+                value={birthDate}
+                max={getTodayCivilDate()}
+                onChange={(event) => setBirthDate(event.target.value)}
                 className={`${inputClass} mt-2`}
               />
             </label>

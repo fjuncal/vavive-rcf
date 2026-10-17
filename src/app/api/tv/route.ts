@@ -11,6 +11,7 @@ import {
   getManualAdjustmentsByType,
   getManualAdjustmentsTotals,
 } from "@/services/interaction-adjustments";
+import { getBirthdayHighlights } from "@/domain/birthdays";
 
 type TVPeriod =
   | "last_7_days"
@@ -115,7 +116,13 @@ export async function GET(request: NextRequest) {
       // Pessoas da unidade (1 query para todas, sem N+1 e sem históricos).
       prisma.franchiseeMember.findMany({
         where: { franchiseeId: { in: ids }, active: true },
-        select: { id: true, franchiseeId: true, name: true, photoUrl: true },
+        select: {
+          id: true,
+          franchiseeId: true,
+          name: true,
+          photoUrl: true,
+          birthDate: true,
+        },
         orderBy: [{ franchiseeId: "asc" }, { createdAt: "asc" }],
       }),
     ]);
@@ -144,10 +151,46 @@ export async function GET(request: NextRequest) {
   const lastContactByFranchisee = new Map(
     latestContacts.map((item) => [item.franchiseeId, item._max.contactedAt]),
   );
-  const membersByFranchisee = new Map<string, Array<{ id: string; name: string; photoUrl: string | null }>>();
+  const unitNameById = new Map(
+    franchisees.map((franchisee) => [franchisee.id, franchisee.unitName]),
+  );
+  const birthdays = getBirthdayHighlights(
+    memberRows.map((member) => ({
+      memberId: member.id,
+      memberName: member.name,
+      photoUrl: member.photoUrl,
+      birthDate: member.birthDate,
+      franchiseeId: member.franchiseeId,
+      unitName: unitNameById.get(member.franchiseeId) ?? "",
+    })),
+  );
+  const birthdayByMember = new Map(
+    birthdays.map((birthday) => [birthday.memberId, birthday]),
+  );
+  const membersByFranchisee = new Map<
+    string,
+    Array<{
+      id: string;
+      name: string;
+      photoUrl: string | null;
+      birthday: {
+        day: number;
+        month: number;
+        status: "today" | "week" | "month";
+      } | null;
+    }>
+  >();
   for (const member of memberRows) {
     const list = membersByFranchisee.get(member.franchiseeId) ?? [];
-    list.push({ id: member.id, name: member.name, photoUrl: member.photoUrl });
+    const birthday = birthdayByMember.get(member.id);
+    list.push({
+      id: member.id,
+      name: member.name,
+      photoUrl: member.photoUrl,
+      birthday: birthday
+        ? { day: birthday.day, month: birthday.month, status: birthday.status }
+        : null,
+    });
     membersByFranchisee.set(member.franchiseeId, list);
   }
   const lifetimeByFranchisee = new Map(
@@ -184,6 +227,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     period,
     periodLabel: periodLabels[period],
+    birthdays,
     currentMonth: {
       qualifiedContacts: qualified,
       contactedFranchisees,

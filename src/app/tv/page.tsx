@@ -18,6 +18,8 @@ import {
   type TVFranchisee,
 } from "@/components/tv/touch-contact-panel";
 import { FranchiseeSelector } from "@/components/tv/franchisee-selector";
+import { BirthdayHighlights, UnitBirthdayBadge } from "@/components/tv/birthday-highlights";
+import type { TVBirthday } from "@/components/tv/birthday-types";
 import { VaviveLogo } from "@/components/brand/vavive-logo";
 import {
   CONTACT_ATTENTION_CONFIG,
@@ -70,6 +72,7 @@ type TVData = {
     totalFranchisees: number;
   };
   franchisees: Franchisee[];
+  birthdays: TVBirthday[];
 };
 
 const implementationStatusClass: Record<ImplementationDeadlineStatus, string> = {
@@ -85,6 +88,7 @@ const empty: TVData = {
     totalFranchisees: 0,
   },
   franchisees: [],
+  birthdays: [],
 };
 const metrics = [
   { key: "whatsapp", label: "WhatsApp" },
@@ -222,7 +226,13 @@ export default function TVPage() {
         router.replace("/tv/login");
         return;
       }
-      if (response.ok) setData(await response.json());
+      if (response.ok) {
+        const next = (await response.json()) as TVData;
+        setData(next);
+        setCurrentData((current) =>
+          current ? next.franchisees.find((item) => item.id === current.id) ?? null : current,
+        );
+      }
     } catch {}
   }, [period, router]);
   const refreshCurrent = useCallback(
@@ -467,10 +477,10 @@ export default function TVPage() {
             </button>
           </div>
         </header>
-        <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[minmax(0,1fr)_350px]">
+        <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(300px,350px)]">
           {current ? (
             <section
-              className={`relative min-h-0 overflow-hidden rounded-[32px] shadow-2xl ${currentAttention.surfaceClass} ${currentAttention.carouselClass}`}
+              className={`relative min-h-0 min-w-0 overflow-hidden rounded-[32px] shadow-2xl ${currentAttention.surfaceClass} ${currentAttention.carouselClass}`}
             >
               {current.attention === "urgente" && (
                 <div className="pointer-events-none absolute inset-x-0 top-0 h-2 bg-[#facc15] shadow-[0_0_24px_rgba(250,204,21,0.95)]" />
@@ -499,14 +509,14 @@ export default function TVPage() {
                     />
                   </div>
                 </div>
-                <div className="mt-5 grid min-h-0 flex-1 items-center gap-6 lg:grid-cols-[.7fr_1.3fr]">
+                <div className="mt-5 grid min-h-0 flex-1 items-center gap-6 lg:grid-cols-[minmax(0,.7fr)_minmax(0,1.3fr)]">
                   <UnitPhotos
                     layout="hero"
                     members={current.members}
                     fallbackName={current.name}
                     fallbackPhoto={current.photoUrl}
                   />
-                  <div className="text-white">
+                  <div className="min-h-0 min-w-0 text-white">
                     <div className="flex flex-wrap items-center gap-3">
                       <p className="flex items-center gap-2 text-base font-extrabold uppercase tracking-[.22em] text-[#b8ee35]">
                         <Sparkles className="h-5 w-5" />
@@ -543,6 +553,7 @@ export default function TVPage() {
                     <p className="mt-3 truncate text-2xl text-white/70">
                       {current.unitName}
                     </p>
+                    <UnitBirthdayBadge members={current.members} />
                     <p className="mt-2 text-sm font-semibold text-white/80">
                       {current.daysWithoutContact === null
                         ? "Sem contato registrado"
@@ -568,7 +579,7 @@ export default function TVPage() {
                       {metrics.map(({ key, label }) => (
                         <div
                           key={key}
-                          className="rounded-2xl border border-white/15 bg-white/10 p-4"
+                          className="tv-primary-metric rounded-2xl border border-white/15 bg-white/10 p-4"
                         >
                           <p className="text-3xl font-semibold">
                             {current[key]}
@@ -577,7 +588,7 @@ export default function TVPage() {
                         </div>
                       ))}
                     </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-sm">
+                    <div className="tv-primary-detail mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-sm">
                       <span className="font-semibold text-[#b8ee35]">
                         Total de interações
                       </span>
@@ -595,7 +606,7 @@ export default function TVPage() {
                         </span>
                       )}
                     </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-sm">
+                    <div className="tv-primary-detail mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-sm">
                       <span className="font-semibold text-[#b8ee35]">
                         Presença em Lives
                       </span>
@@ -608,11 +619,13 @@ export default function TVPage() {
                         {current.liveAttendanceRate}% de presença
                       </span>
                     </div>
-                    <QuickContactButtons
-                      franchisee={current}
-                      onSaved={registerInstantly}
-                      onUndone={() => void refresh()}
-                    />
+                    <div className="tv-primary-contact">
+                      <QuickContactButtons
+                        franchisee={current}
+                        onSaved={registerInstantly}
+                        onUndone={() => void refresh()}
+                      />
+                    </div>
                   </div>
                 </div>
                 <div className="mt-4 flex shrink-0 items-center justify-between">
@@ -660,7 +673,7 @@ export default function TVPage() {
               Nenhum franqueado ativo encontrado.
             </section>
           )}
-          <aside className="rounded-[32px] bg-white p-5 shadow-xl">
+          <aside className="min-h-0 min-w-0 overflow-y-auto rounded-[32px] bg-white p-5 shadow-xl">
             <p className="text-xs font-bold uppercase tracking-[.2em] text-[#0b8f45]">
               Visão da rede
             </p>
@@ -678,6 +691,9 @@ export default function TVPage() {
                 <p className="text-3xl font-bold text-[#003b71]">{percent}%</p>
                 <p className="text-xs text-slate-500">rede contatada</p>
               </div>
+            </div>
+            <div className="mt-4">
+              <BirthdayHighlights birthdays={data.birthdays} />
             </div>
             <FranchiseeSelector
               franchisees={list}

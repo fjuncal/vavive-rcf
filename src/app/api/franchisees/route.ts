@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { civilDateToUTCDate, isValidCivilDate } from "@/lib/utils";
 import { monthlyServiceCountInputSchema } from "@/services/monthly-service-counts";
 import { photoUrlSchema } from "@/domain/franchisee";
+import { birthDateSchema, birthDateToUTCDate } from "@/domain/birthdays";
 
 const schema = z.object({
   name: z.string("Nome é obrigatório.").min(2, "Nome é obrigatório."),
@@ -12,6 +13,7 @@ const schema = z.object({
     .string("Nome da unidade é obrigatório.")
     .min(2, "Nome da unidade é obrigatório."),
   photoUrl: photoUrlSchema,
+  primaryMemberBirthDate: birthDateSchema,
   moment: z.enum(["IMPLANTACAO", "INAUGURADA"], "Momento da unidade inválido."),
   active: z.boolean("Status da unidade inválido.").default(true),
 });
@@ -206,6 +208,9 @@ export async function POST(request: Request) {
           franchiseeId: created.id,
           name: payload.name,
           photoUrl: payload.photoUrl || null,
+          ...(payload.primaryMemberBirthDate !== undefined
+            ? { birthDate: birthDateToUTCDate(payload.primaryMemberBirthDate) }
+            : {}),
           active: payload.active,
         },
       });
@@ -278,7 +283,15 @@ export async function PUT(request: Request) {
     if (primary) {
       await prisma.franchiseeMember.update({
         where: { id: primary.id },
-        data: { name: payload.name, photoUrl: payload.photoUrl || null },
+        data: {
+          name: payload.name,
+          photoUrl: payload.photoUrl || null,
+          ...(payload.primaryMemberBirthDate !== undefined
+            ? {
+                birthDate: birthDateToUTCDate(payload.primaryMemberBirthDate),
+              }
+            : {}),
+        },
       });
     }
     return NextResponse.json(franchisee);
