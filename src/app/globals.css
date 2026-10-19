@@ -80,6 +80,20 @@ textarea {
   min-height: 0;
 }
 
+.tv-multi-layout {
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.tv-multi-card-grid {
+  min-height: 0;
+  min-width: 0;
+}
+
+.tv-multi-card-grid--compact {
+  grid-auto-rows: minmax(0, 1fr);
+}
+
 .tv-primary-card img.tv-member-photo--one {
   max-height: min(54vh, 580px);
 }
@@ -104,8 +118,10 @@ textarea {
    espaço com identificação, indicadores ou Lives. */
 .tv-multi-card--compact {
   --tv-multi-identity-min: 5.5rem;
+  --tv-multi-stats-min: 3.5rem;
+  --tv-multi-live-min: 1.5rem;
   display: grid;
-  grid-template-rows: auto minmax(var(--tv-multi-identity-min), 1fr) auto auto auto;
+  grid-template-rows: auto minmax(var(--tv-multi-identity-min), 1fr) minmax(var(--tv-multi-stats-min), auto) minmax(var(--tv-multi-live-min), auto) minmax(1.25rem, auto) minmax(2.75rem, auto);
   gap: 0.5rem;
   align-content: stretch;
 }
@@ -122,6 +138,31 @@ textarea {
 .tv-multi-card--compact .tv-multi-member {
   min-height: var(--tv-multi-identity-min);
   align-self: stretch;
+}
+
+.tv-multi-card--compact .tv-multi-header > span:first-child {
+  min-width: 0;
+  max-width: 52%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tv-multi-card--compact .tv-multi-member-copy,
+.tv-multi-card--compact .tv-multi-moment,
+.tv-multi-card--compact .tv-multi-birthday,
+.tv-multi-card--compact .tv-multi-birthday > div {
+  min-width: 0;
+}
+
+.tv-multi-card--compact .tv-multi-moment {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tv-multi-card--compact .tv-multi-moment svg {
+  flex: 0 0 auto;
 }
 
 .tv-multi-card--compact .tv-multi-moment {
@@ -143,8 +184,12 @@ textarea {
 }
 
 .tv-multi-card--compact .tv-multi-birthday > div > p:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 0.5rem;
   line-height: 1;
+  white-space: nowrap;
 }
 
 .tv-multi-card--compact .tv-multi-birthday > div > p:last-child {
@@ -163,13 +208,77 @@ textarea {
   min-height: 0;
 }
 
+.tv-multi-card--compact .tv-multi-stat {
+  min-width: 0;
+}
+
+.tv-multi-card--compact .tv-multi-stat small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tv-multi-card--compact .tv-multi-live > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tv-multi-card--compact .tv-multi-live > span:not(:first-child) {
+  flex: 0 0 auto;
+}
+
 .tv-multi-card--compact .tv-contact-actions {
   min-height: 0;
   align-self: end;
+  display: contents;
 }
 
 .tv-multi-card--compact .tv-contact-actions > div {
   margin-top: 0;
+}
+
+.tv-multi-card--compact .tv-contact-panel--dense {
+  display: contents;
+}
+
+.tv-multi-card--compact .tv-contact-history {
+  min-height: 1.25rem;
+  min-width: 0;
+}
+
+.tv-multi-card--compact .tv-history-compact {
+  min-width: 0;
+  min-height: 1.25rem;
+  padding-block: 0.25rem;
+  display: flex;
+  align-items: center;
+}
+
+.tv-multi-card--compact .tv-contact-buttons {
+  min-width: 0;
+  min-height: 2.75rem;
+  gap: 0.375rem;
+}
+
+.tv-multi-card--compact .tv-contact-button {
+  min-width: 0;
+  min-height: 2.75rem;
+  padding-inline: 0.125rem;
+  white-space: nowrap;
+}
+
+.tv-multi-card--compact .tv-contact-button svg {
+  flex: 0 0 auto;
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+@media (max-width: 1279px) {
+  .tv-multi-layout {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
 }
 
 @media (max-height: 900px) {
@@ -212,6 +321,49 @@ textarea {
   }
   .tv-primary-card .tv-primary-contact > div {
     margin-top: 0.5rem;
+  }
+
+  .tv-multi-card--compact {
+    --tv-multi-identity-min: 4.5rem;
+    --tv-multi-stats-min: 3.5rem;
+    --tv-multi-live-min: 1.5rem;
+    padding: 0.5rem;
+    gap: 0.375rem;
+  }
+  .tv-multi-card--compact .tv-multi-member {
+    gap: 0.5rem;
+  }
+  .tv-multi-card--compact .tv-multi-card-avatar {
+    width: 3rem;
+    height: 3rem;
+  }
+  .tv-multi-card--compact .tv-multi-moment {
+    font-size: 0.5rem;
+  }
+  .tv-multi-card--compact .tv-multi-name {
+    font-size: 1.125rem;
+  }
+  .tv-multi-card--compact .tv-multi-unit {
+    font-size: 0.75rem;
+  }
+  .tv-multi-card--compact .tv-multi-stats {
+    gap: 0.25rem;
+  }
+  .tv-multi-card--compact .tv-multi-stat {
+    padding: 0.375rem 0.25rem;
+  }
+  .tv-multi-card--compact .tv-multi-live {
+    padding-block: 0.25rem;
+  }
+  .tv-multi-card--compact .tv-contact-history,
+  .tv-multi-card--compact .tv-history-compact {
+    min-height: 1.125rem;
+  }
+  .tv-multi-card--compact .tv-history-compact {
+    padding-block: 0.125rem;
+  }
+  .tv-multi-card--compact .tv-history-compact p {
+    font-size: 0.5625rem;
   }
 }
 
@@ -271,13 +423,26 @@ textarea {
   }
 
   .tv-multi-card--compact {
-    --tv-multi-identity-min: 4.5rem;
-    padding: 0.5rem;
-    gap: 0.375rem;
+    --tv-multi-identity-min: 3rem;
+    --tv-multi-stats-min: 3.25rem;
+    --tv-multi-live-min: 1.5rem;
+    padding: 0.375rem;
+    gap: 0.25rem;
+  }
+  .tv-multi-card--compact .tv-multi-header {
+    line-height: 1;
+  }
+  .tv-multi-card--compact .tv-multi-header > span:first-child {
+    padding-block: 0.125rem;
+    font-size: 0.5625rem;
+  }
+  .tv-multi-card--compact .tv-multi-header > span:last-child {
+    font-size: 0.5625rem;
+    line-height: 1;
   }
   .tv-multi-card--compact .tv-multi-member {
     margin-top: 0;
-    gap: 0.5rem;
+    gap: 0.375rem;
   }
   .tv-multi-card--compact .tv-multi-stats {
     margin-top: 0;
@@ -290,6 +455,19 @@ textarea {
     margin-top: 0;
     padding-block: 0.25rem;
   }
+  .tv-multi-card--compact .tv-contact-history,
+  .tv-multi-card--compact .tv-history-compact {
+    min-height: 1.125rem;
+  }
+  .tv-multi-card--compact .tv-history-compact {
+    padding-block: 0.125rem;
+  }
+  .tv-multi-card--compact .tv-history-compact p {
+    font-size: 0.5625rem;
+  }
+  .tv-multi-card--compact .tv-contact-buttons {
+    gap: 0.25rem;
+  }
   .tv-multi-card--compact .tv-contact-actions {
     margin-top: 0;
   }
@@ -297,15 +475,15 @@ textarea {
     margin-top: 0;
   }
   .tv-multi-card--compact .tv-multi-card-avatar {
-    width: 3rem;
-    height: 3rem;
+    width: 2.5rem;
+    height: 2.5rem;
   }
   .tv-multi-card--compact .tv-multi-name {
-    font-size: 1.125rem;
+    font-size: 1rem;
   }
   .tv-multi-card--compact .tv-multi-unit {
     margin-top: 0.125rem;
-    font-size: 0.75rem;
+    font-size: 0.625rem;
   }
   .tv-multi-card--compact .tv-multi-name {
     margin-top: 0.125rem;
@@ -324,5 +502,70 @@ textarea {
   .tv-multi-card--compact .tv-multi-birthday svg {
     width: 0.625rem;
     height: 0.625rem;
+  }
+}
+
+@media (max-height: 700px) {
+  .tv-multi-card--compact {
+    --tv-multi-identity-min: 2.75rem;
+    --tv-multi-stats-min: 2.25rem;
+    --tv-multi-live-min: 1.25rem;
+    padding: 0.25rem;
+    gap: 0.25rem;
+  }
+  .tv-multi-card--compact .tv-multi-member {
+    gap: 0.375rem;
+  }
+  .tv-multi-card--compact .tv-multi-card-avatar {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+  .tv-multi-card--compact .tv-multi-moment {
+    font-size: 0.4375rem;
+  }
+  .tv-multi-card--compact .tv-multi-moment svg {
+    width: 0.625rem;
+    height: 0.625rem;
+  }
+  .tv-multi-card--compact .tv-multi-name {
+    font-size: 1rem;
+  }
+  .tv-multi-card--compact .tv-multi-unit {
+    font-size: 0.625rem;
+  }
+  .tv-multi-card--compact .tv-multi-stats {
+    gap: 0.125rem;
+  }
+  .tv-multi-card--compact .tv-multi-stat {
+    padding: 0.25rem 0.125rem;
+  }
+  .tv-multi-card--compact .tv-multi-stat b {
+    font-size: 0.875rem;
+  }
+  .tv-multi-card--compact .tv-multi-stat small {
+    margin-top: 0.125rem;
+    font-size: 0.4375rem;
+  }
+  .tv-multi-card--compact .tv-multi-live {
+    padding-block: 0.125rem;
+    font-size: 0.5rem;
+    line-height: 1;
+  }
+  .tv-multi-card--compact .tv-contact-history,
+  .tv-multi-card--compact .tv-history-compact {
+    min-height: 1rem;
+  }
+  .tv-multi-card--compact .tv-history-compact {
+    padding-inline: 0.25rem;
+  }
+  .tv-multi-card--compact .tv-history-compact p {
+    font-size: 0.5rem;
+  }
+  .tv-multi-card--compact .tv-contact-button {
+    font-size: 0.5625rem;
+  }
+  .tv-multi-card--compact .tv-contact-button svg {
+    width: 0.75rem;
+    height: 0.75rem;
   }
 }

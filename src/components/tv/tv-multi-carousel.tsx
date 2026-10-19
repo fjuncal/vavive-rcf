@@ -273,9 +273,9 @@ export function TVMultiCarousel({ slots }: { slots: Slots }) {
         </section>
 
         {visible.length ? (
-          <section className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(220px,270px)]">
+          <section className="tv-multi-layout grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(220px,270px)]">
             <div
-              className={`order-2 grid min-h-0 min-w-0 gap-5 xl:order-1 ${slots === 2 ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1 md:grid-cols-[repeat(2,minmax(0,1fr))] md:grid-rows-[repeat(2,minmax(0,1fr))]"}`}
+              className={`tv-multi-card-grid order-2 grid min-h-0 min-w-0 gap-5 xl:order-1 ${slots === 4 ? "tv-multi-card-grid--compact" : ""} ${slots === 2 ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1 md:grid-cols-[repeat(2,minmax(0,1fr))] md:grid-rows-[repeat(2,minmax(0,1fr))]"}`}
             >
               {visible.map((franchisee) => (
                 <FranchiseeCard
@@ -336,7 +336,7 @@ function FranchiseeCard({
   const attention = CONTACT_ATTENTION_CONFIG[franchisee.attention];
   return (
     <article
-      className={`tv-multi-card ${compact ? "tv-multi-card--compact" : ""} flex min-h-0 min-w-0 flex-col rounded-[28px] border-2 text-white shadow-xl ${compact ? "overflow-visible p-3" : "overflow-hidden p-6"} ${attention.surfaceClass} ${attention.carouselClass}`}
+      className={`tv-multi-card ${compact ? "tv-multi-card--compact" : ""} flex min-h-0 min-w-0 flex-col rounded-[28px] border-2 text-white shadow-xl ${compact ? "p-3" : "overflow-hidden p-6"} ${attention.surfaceClass} ${attention.carouselClass}`}
     >
       <div className="tv-multi-header flex min-w-0 items-start justify-between gap-3">
         <span

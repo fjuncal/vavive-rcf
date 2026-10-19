@@ -137,43 +137,47 @@ export function QuickContactButtons({
   }
   const latest = history[0];
   return (
-    <div className={dense ? "mt-2" : compact ? "mt-3" : "mt-4"}>
+    <div
+      className={`tv-contact-panel ${dense ? "tv-contact-panel--dense" : ""} ${dense ? "mt-2" : compact ? "mt-3" : "mt-4"}`}
+    >
       <p
         className={`${dense ? "sr-only" : "mb-2"} font-medium text-white/70 ${compact ? "text-xs" : "text-sm"}`}
       >
         Registrar comunicação
       </p>
       {compact && dense ? (
-        <div className="flex min-h-[1.625rem] min-w-0 items-center">
+        <div className="tv-contact-history flex min-h-[1.625rem] min-w-0 items-center">
           {latest ? (
             <div className="tv-history-compact w-full min-w-0 rounded-xl border border-white/15 bg-[#002f5a]/30 px-2 py-1.5">
-          <p
-            className="min-w-0 truncate text-[10px] leading-tight text-white/80"
-            title={`${labels[latest.type]} · ${latest.member?.name ?? "Unidade"} · ${date(latest.contactedAt)} · ${time(latest.contactedAt)}`}
-          >
-            <span className="font-bold uppercase tracking-[.12em] text-[#b8ee35]">
-              Último contato
-            </span>
-            {` · ${labels[latest.type]}`}
-            {latest.member ? ` · ${latest.member.name}` : ""}
-            {` · ${date(latest.contactedAt)} · ${time(latest.contactedAt)}`}
-          </p>
+              <p
+                className="min-w-0 truncate text-[10px] leading-tight text-white/80"
+                title={`${labels[latest.type]} · ${latest.member?.name ?? "Unidade"} · ${date(latest.contactedAt)} · ${time(latest.contactedAt)}`}
+              >
+                <span className="font-bold uppercase tracking-[.12em] text-[#b8ee35]">
+                  Último contato
+                </span>
+                {` · ${labels[latest.type]}`}
+                {latest.member ? ` · ${latest.member.name}` : ""}
+                {` · ${date(latest.contactedAt)} · ${time(latest.contactedAt)}`}
+              </p>
             </div>
           ) : null}
         </div>
       ) : null}
       <div
-        className={`grid grid-cols-5 gap-2 ${compact ? "text-[10px]" : "text-sm"}`}
+        className={`tv-contact-buttons grid grid-cols-5 gap-2 ${compact ? "text-[10px]" : "text-sm"}`}
       >
         {channels.map(({ type, label, icon: Icon }) => (
           <button
             key={type}
             disabled={Boolean(saving)}
             onClick={() => save(type)}
-            className={`flex items-center justify-center gap-1 rounded-xl border font-semibold transition disabled:opacity-70 ${dense ? "min-h-11 px-0.5 text-[10px]" : compact ? "min-h-10 px-1" : "min-h-14 gap-2 text-sm"} ${saved === type ? "border-[#b8ee35] bg-[#b8ee35] text-[#003b71]" : "border-white/20 bg-white/10 text-white"}`}
+            className={`tv-contact-button flex min-w-0 items-center justify-center gap-1 rounded-xl border font-semibold leading-none transition disabled:opacity-70 ${dense ? "min-h-11 px-0.5 text-[10px]" : compact ? "min-h-10 px-1" : "min-h-14 gap-2 text-sm"} ${saved === type ? "border-[#b8ee35] bg-[#b8ee35] text-[#003b71]" : "border-white/20 bg-white/10 text-white"}`}
           >
             <Icon className="h-4 w-4" />
-            {saving === type ? "Salvando..." : saved === type ? "Salvo" : label}
+            <span className="min-w-0 truncate">
+              {saving === type ? "Salvando..." : saved === type ? "Salvo" : label}
+            </span>
           </button>
         ))}
       </div>
