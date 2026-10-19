@@ -90,6 +90,7 @@ const empty: TVData = {
   franchisees: [],
   birthdays: [],
 };
+const TV_DATA_REFRESH_MS = 60_000;
 const metrics = [
   { key: "whatsapp", label: "WhatsApp" },
   { key: "telefone", label: "Telefone" },
@@ -199,6 +200,8 @@ export default function TVPage() {
   const [role, setRole] = useState<string | null>(null);
   const [now, setNow] = useState(new Date());
   const [currentData, setCurrentData] = useState<Franchisee | null>(null);
+  const refreshRequest = useRef<AbortController | null>(null);
+  const refreshSequence = useRef(0);
   const detailRequest = useRef<AbortController | null>(null);
   const active = Math.min(index, Math.max(0, data.franchisees.length - 1));
   const selected = data.franchisees[active];
@@ -218,22 +221,35 @@ export default function TVPage() {
     implementationDays,
   );
   const refresh = useCallback(async () => {
+    if (refreshRequest.current) return;
+    const controller = new AbortController();
+    const sequence = ++refreshSequence.current;
+    refreshRequest.current = controller;
     try {
       const response = await fetch("/api/tv?period=" + period, {
         cache: "no-store",
+        signal: controller.signal,
       });
       if (response.status === 401) {
         router.replace("/tv/login");
         return;
       }
-      if (response.ok) {
-        const next = (await response.json()) as TVData;
-        setData(next);
-        setCurrentData((current) =>
-          current ? next.franchisees.find((item) => item.id === current.id) ?? null : current,
-        );
-      }
-    } catch {}
+      if (!response.ok || controller.signal.aborted) return;
+      const next = (await response.json()) as TVData;
+      if (controller.signal.aborted || sequence !== refreshSequence.current)
+        return;
+      setData(next);
+      setCurrentData((current) =>
+        current
+          ? next.franchisees.find((item) => item.id === current.id) ?? null
+          : current,
+      );
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError"))
+        return;
+    } finally {
+      if (refreshRequest.current === controller) refreshRequest.current = null;
+    }
   }, [period, router]);
   const refreshCurrent = useCallback(
     async (franchiseeId: string) => {
@@ -267,8 +283,13 @@ export default function TVPage() {
   );
   useEffect(() => {
     void refresh();
-    const interval = window.setInterval(refresh, 60_000);
-    return () => window.clearInterval(interval);
+    const interval = window.setInterval(refresh, TV_DATA_REFRESH_MS);
+    return () => {
+      window.clearInterval(interval);
+      refreshSequence.current += 1;
+      refreshRequest.current?.abort();
+      refreshRequest.current = null;
+    };
   }, [refresh]);
   useEffect(() => {
     if (!selectedId) return;

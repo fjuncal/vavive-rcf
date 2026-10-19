@@ -63,6 +63,7 @@ const key = (type: Channel) =>
   type === "VIDEO_CHAMADA"
     ? "video"
     : (type.toLowerCase() as "whatsapp" | "telefone" | "presencial" | "live");
+const TV_DATA_REFRESH_MS = 60_000;
 export function TVListMode() {
   const [list, setList] = useState<Franchisee[]>([]);
   const [birthdays, setBirthdays] = useState<TVBirthday[]>([]);
@@ -80,27 +81,42 @@ export function TVListMode() {
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let alive = true;
-    const load = () =>
-      fetch("/api/tv?period=" + period, { cache: "no-store" })
-        .then((response) => {
-          if (response.status === 401) {
-            window.location.assign("/tv/login");
-            return null;
-          }
-          return response.ok ? response.json() : null;
-        })
-        .then((data) => {
-          if (alive) {
-            setList(data?.franchisees ?? []);
-            setBirthdays(data?.birthdays ?? []);
-          }
-        })
-        .catch(() => {});
+    let request: AbortController | null = null;
+    let sequence = 0;
+    const load = async () => {
+      if (request) return;
+      const controller = new AbortController();
+      const currentSequence = ++sequence;
+      request = controller;
+      try {
+        const response = await fetch("/api/tv?period=" + period, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (response.status === 401) {
+          window.location.assign("/tv/login");
+          return;
+        }
+        if (!response.ok || controller.signal.aborted) return;
+        const data = await response.json();
+        if (!alive || controller.signal.aborted || currentSequence !== sequence)
+          return;
+        setList(data?.franchisees ?? []);
+        setBirthdays(data?.birthdays ?? []);
+      } catch {
+        // Preserve the last valid TV data until the next polling cycle.
+      } finally {
+        if (request === controller) request = null;
+      }
+    };
     void load();
-    const interval = window.setInterval(load, 60_000);
+    const interval = window.setInterval(load, TV_DATA_REFRESH_MS);
     return () => {
       alive = false;
       window.clearInterval(interval);
+      sequence += 1;
+      request?.abort();
+      request = null;
     };
   }, [period]);
   useEffect(() => {

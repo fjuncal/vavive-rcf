@@ -63,6 +63,25 @@ type TVData = {
 };
 
 const empty: TVData = { periodLabel: "", franchisees: [], birthdays: [] };
+const TV_DATA_REFRESH_MS = 60_000;
+
+function getRotationSeconds(
+  franchisees: Franchisee[],
+  start: number,
+  slots: Slots,
+) {
+  if (!franchisees.length) return 12;
+  return Math.max(
+    12,
+    ...Array.from(
+      { length: Math.min(slots, franchisees.length) },
+      (_, offset) =>
+        CONTACT_ATTENTION_CONFIG[
+          franchisees[(start + offset) % franchisees.length].attention
+        ].carouselSeconds,
+    ),
+  );
+}
 
 function contactKey(type: ContactChannel) {
   if (type === "VIDEO_CHAMADA") return "video";
@@ -79,6 +98,11 @@ export function TVMultiCarousel({ slots }: { slots: Slots }) {
   const [start, setStart] = useState(0);
   const [role, setRole] = useState<string | null>(null);
   const refreshRequest = useRef<AbortController | null>(null);
+  const refreshSequence = useRef(0);
+  const dataRef = useRef<TVData>(empty);
+  const startRef = useRef(0);
+  const rotationSecondsRef = useRef(12);
+  const previousStartRef = useRef(0);
   const visible = useMemo(() => {
     if (!data.franchisees.length) return [];
     return Array.from(
@@ -87,17 +111,13 @@ export function TVMultiCarousel({ slots }: { slots: Slots }) {
         data.franchisees[(start + offset) % data.franchisees.length],
     );
   }, [data.franchisees, slots, start]);
-  const rotationSeconds = Math.max(
-    12,
-    ...visible.map(
-      (item) => CONTACT_ATTENTION_CONFIG[item.attention].carouselSeconds,
-    ),
-  );
+  const rotationSeconds = getRotationSeconds(data.franchisees, start, slots);
   const [seconds, setSeconds] = useState(rotationSeconds);
 
   const refresh = useCallback(async () => {
-    refreshRequest.current?.abort();
+    if (refreshRequest.current) return;
     const controller = new AbortController();
+    const sequence = ++refreshSequence.current;
     refreshRequest.current = controller;
     try {
       const response = await fetch("/api/tv?period=" + period, {
@@ -108,24 +128,61 @@ export function TVMultiCarousel({ slots }: { slots: Slots }) {
         router.replace("/tv/login");
         return;
       }
-      if (response.ok && !controller.signal.aborted)
-        setData(await response.json());
+      if (!response.ok || controller.signal.aborted) return;
+      const next = (await response.json()) as TVData;
+      if (controller.signal.aborted || sequence !== refreshSequence.current) return;
+
+      const previous = dataRef.current;
+      dataRef.current = next;
+      setData(next);
+      setStart((current) => {
+        if (!next.franchisees.length) {
+          startRef.current = 0;
+          return 0;
+        }
+        const nextStart = current < next.franchisees.length
+          ? current
+          : current % next.franchisees.length;
+        startRef.current = nextStart;
+        return nextStart;
+      });
+
+      const nextRotationSeconds = getRotationSeconds(
+        next.franchisees,
+        startRef.current,
+        slots,
+      );
+      setSeconds((current) =>
+        previous.franchisees.length === 0 && next.franchisees.length > 0
+          ? nextRotationSeconds
+          : Math.min(current, nextRotationSeconds),
+      );
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError"))
         return;
+    } finally {
+      if (refreshRequest.current === controller) refreshRequest.current = null;
     }
-  }, [period, router]);
+  }, [period, router, slots]);
 
   useEffect(() => {
-    const interval = window.setInterval(refresh, 60_000);
+    const interval = window.setInterval(refresh, TV_DATA_REFRESH_MS);
     return () => {
       window.clearInterval(interval);
+      refreshSequence.current += 1;
       refreshRequest.current?.abort();
+      refreshRequest.current = null;
     };
   }, [refresh]);
   useEffect(() => {
     void refresh();
-  }, [refresh, start]);
+  }, [refresh]);
+
+  useEffect(() => {
+    dataRef.current = data;
+    startRef.current = start;
+    rotationSecondsRef.current = rotationSeconds;
+  }, [data, rotationSeconds, start]);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -135,31 +192,38 @@ export function TVMultiCarousel({ slots }: { slots: Slots }) {
   }, []);
 
   useEffect(() => {
-    setSeconds(rotationSeconds);
+    const changedPage = previousStartRef.current !== start;
+    previousStartRef.current = start;
+    if (changedPage && dataRef.current.franchisees.length)
+      setSeconds(rotationSeconds);
   }, [rotationSeconds, start]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
       setSeconds((value) => {
         if (value <= 1) {
-          setStart(
-            (current) =>
-              (current + slots) % Math.max(1, data.franchisees.length),
-          );
-          return rotationSeconds;
+          setStart((current) => {
+            const nextStart =
+              (current + slots) % Math.max(1, dataRef.current.franchisees.length);
+            startRef.current = nextStart;
+            return nextStart;
+          });
+          return rotationSecondsRef.current;
         }
         return value - 1;
       });
     }, 1000);
     return () => window.clearInterval(interval);
-  }, [data.franchisees.length, rotationSeconds, slots]);
+  }, [slots]);
 
   const advance = (direction: -1 | 1) => {
-    setStart(
-      (current) =>
+    setStart((current) => {
+      const nextStart =
         (current + direction * slots + data.franchisees.length) %
-        Math.max(1, data.franchisees.length),
-    );
+        Math.max(1, data.franchisees.length);
+      startRef.current = nextStart;
+      return nextStart;
+    });
   };
 
   const registerInstantly = useCallback(
@@ -169,9 +233,10 @@ export function TVMultiCarousel({ slots }: { slots: Slots }) {
       status: { attention: ContactAttention; daysWithoutContact: number },
     ) => {
       const key = contactKey(type);
-      setData((previous) => ({
-        ...previous,
-        franchisees: previous.franchisees.map((item) =>
+      setData((previous) => {
+        const next = {
+          ...previous,
+          franchisees: previous.franchisees.map((item) =>
           item.id === franchiseeId
             ? {
                 ...item,
@@ -180,8 +245,11 @@ export function TVMultiCarousel({ slots }: { slots: Slots }) {
                 daysWithoutContact: status.daysWithoutContact,
               }
             : item,
-        ),
-      }));
+          ),
+        };
+        dataRef.current = next;
+        return next;
+      });
       void refresh();
     },
     [refresh],
