@@ -2,7 +2,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Cake, Gift, Sparkles, X } from "lucide-react";
 import { getTodayCivilDate } from "@/lib/utils";
-import type { TVBirthday } from "@/components/tv/birthday-types";
+import type {
+  TVBirthday,
+  TVBirthdayMonth,
+  TVBirthdayMonths,
+} from "@/components/tv/birthday-types";
 import type { UnitMember } from "@/components/tv/unit-members";
 
 const FALLBACK_PHOTO =
@@ -26,13 +30,43 @@ function dateLabel(item: TVBirthday) {
   return `${String(item.day).padStart(2, "0")} ${MONTHS[item.month - 1]}`;
 }
 
-function currentMonthLabel() {
-  const month = Number(getTodayCivilDate().slice(5, 7));
+function monthName(month: number) {
   const label = new Intl.DateTimeFormat("pt-BR", {
     month: "long",
     timeZone: "UTC",
   }).format(new Date(Date.UTC(2020, month - 1, 1)));
   return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function monthLabel(month: TVBirthdayMonth) {
+  const label = new Intl.DateTimeFormat("pt-BR", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(month.year, month.month - 1, 1)));
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function currentMonthLabel() {
+  return monthName(Number(getTodayCivilDate().slice(5, 7)));
+}
+
+function fallbackBirthdayMonths(birthdays: TVBirthday[]): TVBirthdayMonths {
+  const today = getTodayCivilDate();
+  const currentDate = new Date(`${today}T00:00:00Z`);
+  const nextDate = new Date(Date.UTC(currentDate.getUTCFullYear(), currentDate.getUTCMonth() + 1, 1));
+  return {
+    current: {
+      year: currentDate.getUTCFullYear(),
+      month: currentDate.getUTCMonth() + 1,
+      birthdays,
+    },
+    next: {
+      year: nextDate.getUTCFullYear(),
+      month: nextDate.getUTCMonth() + 1,
+      birthdays: [],
+    },
+  };
 }
 
 function BirthdayCard({ item }: { item: TVBirthday }) {
@@ -330,15 +364,18 @@ function paginateBirthdayGroups(
   return pages;
 }
 
-function BirthdaySidebar({
-  birthdays,
+function BirthdayMonthPanel({
+  month,
   compact,
-  fill = false,
+  fill,
+  active,
 }: {
-  birthdays: TVBirthday[];
+  month: TVBirthdayMonth;
   compact: boolean;
-  fill?: boolean;
+  fill: boolean;
+  active: boolean;
 }) {
+  const { birthdays } = month;
   const groups = useMemo<BirthdayGroup[]>(
     () =>
       (["today", "week", "month"] as const)
@@ -364,7 +401,13 @@ function BirthdaySidebar({
   useEffect(() => {
     const list = listRef.current;
     const measure = measureRef.current;
-    if (!list || !measure || !groups.length) return;
+    if (!list || !measure) return;
+    if (!groups.length) {
+      pagesRef.current = [];
+      pageIndexRef.current = 0;
+      previousPagesRef.current = [];
+      return;
+    }
 
     let frame = 0;
     const measurePages = () => {
@@ -441,6 +484,7 @@ function BirthdaySidebar({
   }, [pages]);
 
   useEffect(() => {
+    if (!active) return;
     const interval = window.setInterval(() => {
       if (Date.now() < pausedUntilRef.current) return;
       const count = pagesRef.current.length;
@@ -452,7 +496,7 @@ function BirthdaySidebar({
       });
     }, 10_000);
     return () => window.clearInterval(interval);
-  }, []);
+  }, [active]);
 
   useEffect(() => {
     return () => {
@@ -494,13 +538,13 @@ function BirthdaySidebar({
     }
   };
 
-  const visibleGroups = pages[pageIndex]?.groups ?? groups;
+  const visibleGroups = groups.length ? pages[pageIndex]?.groups ?? groups : [];
   const visiblePageKey = pages[pageIndex]
     ? birthdayPageKey(pages[pageIndex])
     : "birthday-page-pending";
 
   return (
-    <section className={`relative flex min-h-0 flex-col rounded-2xl border border-[#003b71]/10 bg-white shadow-lg ${fill ? "h-full" : ""} ${compact ? "p-3" : "p-4"}`}>
+    <div className={`relative flex min-h-0 min-w-0 flex-col ${fill ? "h-full" : ""}`}>
       <div className="flex shrink-0 items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <span className={`flex shrink-0 items-center justify-center rounded-xl bg-[#003b71] text-[#b8ee35] ${compact ? "h-8 w-8" : "h-9 w-9"}`}>
@@ -508,9 +552,9 @@ function BirthdaySidebar({
           </span>
           <div className="min-w-0">
             <h2 className={`${compact ? "text-sm" : "text-base"} truncate font-bold text-[#003b71]`}>
-              Aniversariantes do mês
+              Aniversariantes de {monthName(month.month).toLowerCase()}
             </h2>
-            <p className="truncate text-[10px] text-slate-500">{currentMonthLabel()}</p>
+            <p className="truncate text-[10px] text-slate-500">{monthLabel(month)}</p>
           </div>
         </div>
         <span className="shrink-0 rounded-full bg-[#b8ee35]/60 px-2 py-1 text-[10px] font-bold text-[#003b71]">
@@ -528,9 +572,9 @@ function BirthdaySidebar({
 
       <div
         ref={listRef}
-        tabIndex={0}
+        tabIndex={active ? 0 : -1}
         aria-label="Navegação dos aniversariantes"
-        aria-live="polite"
+        aria-live={active ? "polite" : "off"}
         onKeyDown={handleKeyDown}
         onPointerDown={(event) => {
           event.currentTarget.focus();
@@ -549,50 +593,109 @@ function BirthdaySidebar({
         }}
         className={`relative mt-3 min-h-0 touch-pan-y ${fill ? "flex-1 overflow-y-auto" : "overflow-y-auto"} pr-1 focus:outline-none focus:ring-2 focus:ring-[#b8ee35] ${compact ? "max-h-[min(48vh,440px)]" : "max-h-[min(52vh,500px)]"}`}
       >
-        <div key={visiblePageKey} className="tv-birthday-page space-y-2">
-          {visibleGroups.map((group) => (
-            <BirthdayGroupBlock key={group.status} group={group} compact={compact} />
-          ))}
-        </div>
+        {groups.length ? (
+          <div key={visiblePageKey} className="tv-birthday-page space-y-2">
+            {visibleGroups.map((group) => (
+              <BirthdayGroupBlock key={group.status} group={group} compact={compact} />
+            ))}
+          </div>
+        ) : (
+          <div className={`flex min-h-24 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 text-center text-xs text-slate-400 ${fill ? "h-full" : ""}`}>
+            Nenhum aniversariante em {monthName(month.month).toLowerCase()}.
+          </div>
+        )}
         {paused && pages.length > 1 ? (
           <span className="sr-only">Rotação pausada após interação manual</span>
         ) : null}
+      </div>
+    </div>
+  );
+}
+
+function BirthdaySidebar({
+  birthdayMonths,
+  compact,
+  fill = false,
+}: {
+  birthdayMonths: TVBirthdayMonths;
+  compact: boolean;
+  fill?: boolean;
+}) {
+  const months = [birthdayMonths.current, birthdayMonths.next];
+  const [monthIndex, setMonthIndex] = useState(0);
+  const activeMonthIndex = Math.min(monthIndex, months.length - 1);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setMonthIndex((current) => (current + 1) % months.length);
+    }, 30_000);
+    return () => window.clearInterval(interval);
+  }, [months.length]);
+
+  return (
+    <section className={`relative flex min-h-0 flex-col rounded-2xl border border-[#003b71]/10 bg-white shadow-lg ${fill ? "h-full" : ""} ${compact ? "p-3" : "p-4"}`}>
+      <div className={`relative min-h-0 overflow-hidden ${fill ? "flex-1" : ""}`}>
+        <div
+          className="flex h-full min-h-0 w-[200%] transition-transform duration-700 ease-in-out motion-reduce:transition-none"
+          style={{ transform: `translate3d(-${activeMonthIndex * 50}%, 0, 0)` }}
+        >
+          {months.map((month, index) => (
+            <div
+              key={`${month.year}-${month.month}-${index}`}
+              aria-hidden={index !== activeMonthIndex}
+              className="h-full w-1/2 shrink-0 min-w-0"
+            >
+              <BirthdayMonthPanel
+                month={month}
+                compact={compact}
+                fill={fill}
+                active={index === activeMonthIndex}
+              />
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );
 }
 
-function ExpandedBirthdayPanel({ birthdays }: { birthdays: TVBirthday[] }) {
-  return <BirthdaySidebar birthdays={birthdays} compact={false} />;
+function ExpandedBirthdayPanel({ birthdayMonths }: { birthdayMonths: TVBirthdayMonths }) {
+  return <BirthdaySidebar birthdayMonths={birthdayMonths} compact={false} />;
 }
 
 export function BirthdayHighlights({
   birthdays,
+  birthdayMonths,
   compact = false,
   sidebar = false,
   fill = false,
 }: {
   birthdays: TVBirthday[];
+  birthdayMonths?: TVBirthdayMonths;
   compact?: boolean;
   sidebar?: boolean;
   fill?: boolean;
 }) {
-  if (!birthdays.length) return null;
+  const resolvedBirthdayMonths = useMemo(
+    () => birthdayMonths ?? (birthdays.length ? fallbackBirthdayMonths(birthdays) : null),
+    [birthdayMonths, birthdays],
+  );
+  if (!resolvedBirthdayMonths) return null;
   if (sidebar) {
-    if (!compact) return <BirthdaySidebar birthdays={birthdays} compact={false} />;
+    if (!compact) return <BirthdaySidebar birthdayMonths={resolvedBirthdayMonths} compact={false} />;
     return (
       <>
         <div className="hidden h-full min-h-0 flex-col xl:flex">
-          <BirthdaySidebar birthdays={birthdays} compact fill={fill} />
+          <BirthdaySidebar birthdayMonths={resolvedBirthdayMonths} compact fill={fill} />
         </div>
         <div className="xl:hidden">
-          <CompactBirthdayStrip birthdays={birthdays} />
+          <CompactBirthdayStrip birthdays={resolvedBirthdayMonths.current.birthdays} />
         </div>
       </>
     );
   }
-  if (compact) return <CompactBirthdayStrip birthdays={birthdays} />;
-  return <ExpandedBirthdayPanel birthdays={birthdays} />;
+  if (compact) return <CompactBirthdayStrip birthdays={resolvedBirthdayMonths.current.birthdays} />;
+  return <ExpandedBirthdayPanel birthdayMonths={resolvedBirthdayMonths} />;
 }
 
 export function UnitBirthdayBadge({ members, compact = false }: { members: UnitMember[]; compact?: boolean }) {

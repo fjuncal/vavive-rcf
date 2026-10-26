@@ -11,7 +11,10 @@ import {
   getManualAdjustmentsByType,
   getManualAdjustmentsTotals,
 } from "@/services/interaction-adjustments";
-import { getBirthdayHighlights } from "@/domain/birthdays";
+import {
+  getBirthdayHighlights,
+  getBirthdayMonthWindow,
+} from "@/domain/birthdays";
 
 type TVPeriod =
   | "last_7_days"
@@ -154,16 +157,16 @@ export async function GET(request: NextRequest) {
   const unitNameById = new Map(
     franchisees.map((franchisee) => [franchisee.id, franchisee.unitName]),
   );
-  const birthdays = getBirthdayHighlights(
-    memberRows.map((member) => ({
-      memberId: member.id,
-      memberName: member.name,
-      photoUrl: member.photoUrl,
-      birthDate: member.birthDate,
-      franchiseeId: member.franchiseeId,
-      unitName: unitNameById.get(member.franchiseeId) ?? "",
-    })),
-  );
+  const birthdayCandidates = memberRows.map((member) => ({
+    memberId: member.id,
+    memberName: member.name,
+    photoUrl: member.photoUrl,
+    birthDate: member.birthDate,
+    franchiseeId: member.franchiseeId,
+    unitName: unitNameById.get(member.franchiseeId) ?? "",
+  }));
+  const birthdays = getBirthdayHighlights(birthdayCandidates);
+  const birthdayMonths = getBirthdayMonthWindow(birthdayCandidates);
   const birthdayByMember = new Map(
     birthdays.map((birthday) => [birthday.memberId, birthday]),
   );
@@ -228,6 +231,7 @@ export async function GET(request: NextRequest) {
     period,
     periodLabel: periodLabels[period],
     birthdays,
+    birthdayMonths,
     currentMonth: {
       qualifiedContacts: qualified,
       contactedFranchisees,

@@ -29,7 +29,7 @@ import {
 } from "@/components/tv/unit-members";
 import { VaviveLogo } from "@/components/brand/vavive-logo";
 import { BirthdayHighlights, UnitBirthdayBadge } from "@/components/tv/birthday-highlights";
-import type { TVBirthday } from "@/components/tv/birthday-types";
+import type { TVBirthday, TVBirthdayMonths } from "@/components/tv/birthday-types";
 
 type Slots = 2 | 4;
 type TVPeriod =
@@ -60,6 +60,7 @@ type TVData = {
   periodLabel: string;
   franchisees: Franchisee[];
   birthdays: TVBirthday[];
+  birthdayMonths?: TVBirthdayMonths;
 };
 
 const empty: TVData = { periodLabel: "", franchisees: [], birthdays: [] };
@@ -356,7 +357,13 @@ export function TVMultiCarousel({ slots }: { slots: Slots }) {
               ))}
             </div>
             <aside className="order-1 flex min-h-0 min-w-0 max-h-28 flex-col overflow-y-auto xl:order-2 xl:max-h-none xl:overflow-hidden">
-              <BirthdayHighlights birthdays={data.birthdays} compact sidebar fill />
+              <BirthdayHighlights
+                birthdays={data.birthdays}
+                birthdayMonths={data.birthdayMonths}
+                compact
+                sidebar
+                fill
+              />
             </aside>
           </section>
         ) : (

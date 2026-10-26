@@ -19,7 +19,7 @@ import {
 } from "@/components/tv/touch-contact-panel";
 import { FranchiseeSelector } from "@/components/tv/franchisee-selector";
 import { BirthdayHighlights, UnitBirthdayBadge } from "@/components/tv/birthday-highlights";
-import type { TVBirthday } from "@/components/tv/birthday-types";
+import type { TVBirthday, TVBirthdayMonths } from "@/components/tv/birthday-types";
 import { VaviveLogo } from "@/components/brand/vavive-logo";
 import {
   CONTACT_ATTENTION_CONFIG,
@@ -73,6 +73,7 @@ type TVData = {
   };
   franchisees: Franchisee[];
   birthdays: TVBirthday[];
+  birthdayMonths?: TVBirthdayMonths;
 };
 
 const implementationStatusClass: Record<ImplementationDeadlineStatus, string> = {
@@ -714,7 +715,10 @@ export default function TVPage() {
               </div>
             </div>
             <div className="mt-4">
-              <BirthdayHighlights birthdays={data.birthdays} />
+              <BirthdayHighlights
+                birthdays={data.birthdays}
+                birthdayMonths={data.birthdayMonths}
+              />
             </div>
             <FranchiseeSelector
               franchisees={list}

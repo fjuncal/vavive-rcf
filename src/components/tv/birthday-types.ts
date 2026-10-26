@@ -16,3 +16,14 @@ export type TVBirthday = {
   month: number;
   status: BirthdayStatus;
 };
+
+export type TVBirthdayMonth = {
+  year: number;
+  month: number;
+  birthdays: TVBirthday[];
+};
+
+export type TVBirthdayMonths = {
+  current: TVBirthdayMonth;
+  next: TVBirthdayMonth;
+};

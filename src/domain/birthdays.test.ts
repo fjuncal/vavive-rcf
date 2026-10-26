@@ -4,6 +4,7 @@ import {
   birthdayMatchesMonthDay,
   classifyBirthday,
   getBirthdayHighlights,
+  getBirthdayMonthWindow,
 } from "@/domain/birthdays";
 
 assert.equal(classifyBirthday("1990-10-16", "2026-10-16"), "today");
@@ -81,5 +82,63 @@ assert.deepEqual(
     ["month", "month"],
   ],
 );
+
+const decemberWindow = getBirthdayMonthWindow(
+  [
+    {
+      memberId: "december",
+      memberName: "Pessoa dezembro",
+      photoUrl: null,
+      birthDate: "1990-12-31",
+      franchiseeId: "unit-1",
+      unitName: "Unidade 1",
+    },
+    {
+      memberId: "january",
+      memberName: "Pessoa janeiro",
+      photoUrl: null,
+      birthDate: "1990-01-01",
+      franchiseeId: "unit-1",
+      unitName: "Unidade 1",
+    },
+  ],
+  "2026-12-15",
+);
+assert.deepEqual(
+  [decemberWindow.current.year, decemberWindow.current.month],
+  [2026, 12],
+);
+assert.deepEqual(
+  [decemberWindow.next.year, decemberWindow.next.month],
+  [2027, 1],
+);
+assert.deepEqual(
+  decemberWindow.current.birthdays.map((item) => item.memberId),
+  ["december"],
+);
+assert.deepEqual(
+  decemberWindow.next.birthdays.map((item) => item.memberId),
+  ["january"],
+);
+
+const emptyNextWindow = getBirthdayMonthWindow(
+  [
+    {
+      memberId: "december-only",
+      memberName: "Pessoa dezembro",
+      photoUrl: null,
+      birthDate: "1990-12-31",
+      franchiseeId: "unit-1",
+      unitName: "Unidade 1",
+    },
+  ],
+  "2026-12-15",
+);
+assert.equal(emptyNextWindow.current.birthdays.length, 1);
+assert.equal(emptyNextWindow.next.birthdays.length, 0);
+
+const emptyWindow = getBirthdayMonthWindow([], "2026-12-15");
+assert.equal(emptyWindow.current.birthdays.length, 0);
+assert.equal(emptyWindow.next.birthdays.length, 0);
 
 console.log("birthday domain tests passed");

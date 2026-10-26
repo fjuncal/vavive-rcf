@@ -25,6 +25,17 @@ export type BirthdayHighlight = {
   status: BirthdayStatus;
 };
 
+export type BirthdayMonthHighlights = {
+  year: number;
+  month: number;
+  birthdays: BirthdayHighlight[];
+};
+
+export type BirthdayMonthWindow = {
+  current: BirthdayMonthHighlights;
+  next: BirthdayMonthHighlights;
+};
+
 const BIRTH_DATE_MESSAGE = "A data de nascimento deve ser válida e não pode ser futura.";
 
 /** Shared API validation. Empty string clears birthday. */
@@ -152,6 +163,97 @@ export function getBirthdayHighlights(
     const observed = observedBirthday(birth, reference.year);
     const belongsToCurrentMonth = observed.month === reference.month;
     if (status !== "today" && status !== "week" && !belongsToCurrentMonth) return [];
+    seen.add(candidate.memberId);
+    return [{
+      memberId: candidate.memberId,
+      memberName: candidate.memberName,
+      photoUrl: candidate.photoUrl,
+      franchiseeId: candidate.franchiseeId,
+      unitName: candidate.unitName,
+      day: observed.day,
+      month: observed.month,
+      status,
+    }];
+  });
+
+  const rank: Record<BirthdayStatus, number> = { today: 0, week: 1, month: 2 };
+  return highlights.sort(
+    (left, right) =>
+      rank[left.status] - rank[right.status] ||
+      left.day - right.day ||
+      left.memberName.localeCompare(right.memberName, "pt-BR"),
+  );
+}
+
+/** Returns strict current and next calendar-month compositions for TV. */
+export function getBirthdayMonthWindow(
+  candidates: BirthdayCandidate[],
+  referenceDate = getTodayCivilDate(),
+): BirthdayMonthWindow {
+  const reference = civilParts(referenceDate);
+  if (!reference) {
+    return {
+      current: { year: 0, month: 0, birthdays: [] },
+      next: { year: 0, month: 0, birthdays: [] },
+    };
+  }
+
+  const nextMonth = new Date(Date.UTC(reference.year, reference.month, 1));
+  const current = {
+    year: reference.year,
+    month: reference.month,
+  };
+  const next = {
+    year: nextMonth.getUTCFullYear(),
+    month: nextMonth.getUTCMonth() + 1,
+  };
+
+  return {
+    current: {
+      ...current,
+      birthdays: getBirthdayHighlightsForMonth(
+        candidates,
+        current.year,
+        current.month,
+        referenceDate,
+      ),
+    },
+    next: {
+      ...next,
+      birthdays: getBirthdayHighlightsForMonth(
+        candidates,
+        next.year,
+        next.month,
+        referenceDate,
+      ),
+    },
+  };
+}
+
+/** Returns only birthdays observed inside requested calendar month. */
+export function getBirthdayHighlightsForMonth(
+  candidates: BirthdayCandidate[],
+  year: number,
+  month: number,
+  referenceDate = getTodayCivilDate(),
+): BirthdayHighlight[] {
+  const reference = civilParts(referenceDate);
+  if (!reference || year < 1 || month < 1 || month > 12) return [];
+
+  const isCurrentMonth = reference.year === year && reference.month === month;
+  const seen = new Set<string>();
+  const highlights = candidates.flatMap((candidate) => {
+    if (seen.has(candidate.memberId)) return [];
+    const birth = civilParts(candidate.birthDate);
+    if (!birth) return [];
+    const observed = observedBirthday(birth, year);
+    if (observed.month !== month) return [];
+
+    const status = isCurrentMonth
+      ? classifyBirthday(candidate.birthDate, referenceDate)
+      : "month";
+    if (!status) return [];
+
     seen.add(candidate.memberId);
     return [{
       memberId: candidate.memberId,

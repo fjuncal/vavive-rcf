@@ -23,7 +23,7 @@ import {
   type UnitMember,
 } from "@/components/tv/unit-members";
 import { BirthdayHighlights, UnitBirthdayBadge } from "@/components/tv/birthday-highlights";
-import type { TVBirthday } from "@/components/tv/birthday-types";
+import type { TVBirthday, TVBirthdayMonths } from "@/components/tv/birthday-types";
 type Channel =
   "WHATSAPP" | "TELEFONE" | "VIDEO_CHAMADA" | "PRESENCIAL" | "LIVE";
 type Franchisee = {
@@ -67,6 +67,7 @@ const TV_DATA_REFRESH_MS = 60_000;
 export function TVListMode() {
   const [list, setList] = useState<Franchisee[]>([]);
   const [birthdays, setBirthdays] = useState<TVBirthday[]>([]);
+  const [birthdayMonths, setBirthdayMonths] = useState<TVBirthdayMonths>();
   const [target, setTarget] = useState<Franchisee | null>(null);
   const [saving, setSaving] = useState("");
   const [done, setDone] = useState("");
@@ -103,6 +104,7 @@ export function TVListMode() {
           return;
         setList(data?.franchisees ?? []);
         setBirthdays(data?.birthdays ?? []);
+        setBirthdayMonths(data?.birthdayMonths);
       } catch {
         // Preserve the last valid TV data until the next polling cycle.
       } finally {
@@ -388,7 +390,13 @@ export function TVListMode() {
             </section>
           </div>
           <aside className="order-1 flex min-h-0 min-w-0 max-h-28 flex-col overflow-y-auto xl:order-2 xl:max-h-none xl:overflow-hidden">
-            <BirthdayHighlights birthdays={birthdays} compact sidebar fill />
+            <BirthdayHighlights
+              birthdays={birthdays}
+              birthdayMonths={birthdayMonths}
+              compact
+              sidebar
+              fill
+            />
           </aside>
         </div>
       </div>
