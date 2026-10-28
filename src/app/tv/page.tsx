@@ -10,6 +10,8 @@ import {
   LayoutDashboard,
   LayoutGrid,
   LogOut,
+  Pause,
+  Play,
   Sparkles,
 } from "lucide-react";
 import {
@@ -198,12 +200,19 @@ export default function TVPage() {
   const [period, setPeriod] = useState<TVPeriod>("last_30_days");
   const [index, setIndex] = useState(0);
   const [seconds, setSeconds] = useState(12);
+  const [paused, setPaused] = useState(false);
   const [role, setRole] = useState<string | null>(null);
   const [now, setNow] = useState(new Date());
   const [currentData, setCurrentData] = useState<Franchisee | null>(null);
   const refreshRequest = useRef<AbortController | null>(null);
   const refreshSequence = useRef(0);
   const detailRequest = useRef<AbortController | null>(null);
+  const dataRef = useRef<TVData>(empty);
+  const indexRef = useRef(0);
+  const selectedIdRef = useRef<string | null>(null);
+  const renderedSelectedIdRef = useRef<string | null>(null);
+  const pausedRef = useRef(false);
+  const carouselSecondsRef = useRef(12);
   const active = Math.min(index, Math.max(0, data.franchisees.length - 1));
   const selected = data.franchisees[active];
   const selectedId = selected?.id;
@@ -239,12 +248,28 @@ export default function TVPage() {
       const next = (await response.json()) as TVData;
       if (controller.signal.aborted || sequence !== refreshSequence.current)
         return;
+      const previous = dataRef.current;
+      const previousId = selectedIdRef.current ?? previous.franchisees[0]?.id;
+      const previousIndex = previousId
+        ? previous.franchisees.findIndex((item) => item.id === previousId)
+        : 0;
+      const nextIndex = previousId
+        ? next.franchisees.findIndex((item) => item.id === previousId)
+        : -1;
+      const safeIndex = next.franchisees.length
+        ? nextIndex >= 0
+          ? nextIndex
+          : Math.min(Math.max(0, previousIndex), next.franchisees.length - 1)
+        : 0;
+      dataRef.current = next;
       setData(next);
-      setCurrentData((current) =>
-        current
-          ? next.franchisees.find((item) => item.id === current.id) ?? null
-          : current,
-      );
+      indexRef.current = safeIndex;
+      setIndex(safeIndex);
+      selectedIdRef.current = next.franchisees[safeIndex]?.id ?? null;
+      setCurrentData((current) => {
+        if (!current) return null;
+        return next.franchisees.find((item) => item.id === current.id) ?? null;
+      });
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError"))
         return;
@@ -308,24 +333,35 @@ export default function TVPage() {
     return () => window.clearInterval(interval);
   }, []);
   useEffect(() => {
-    setSeconds(currentAttention.carouselSeconds);
-  }, [current?.id, currentAttention.carouselSeconds]);
+    const selectedChanged = renderedSelectedIdRef.current !== selectedId;
+    selectedIdRef.current = selectedId ?? null;
+    carouselSecondsRef.current = currentAttention.carouselSeconds;
+    if (selectedChanged && selectedId) {
+      setSeconds(currentAttention.carouselSeconds);
+    }
+    renderedSelectedIdRef.current = selectedId ?? null;
+  }, [currentAttention.carouselSeconds, selectedId]);
   useEffect(() => {
-    const interval = window.setInterval(
-      () =>
-        setSeconds((value) => {
-          if (value <= 1) {
-            setIndex(
-              (current) => (current + 1) % Math.max(1, data.franchisees.length),
-            );
-            return currentAttention.carouselSeconds;
-          }
-          return value - 1;
-        }),
-      1000,
-    );
+    const interval = window.setInterval(() => {
+      if (pausedRef.current) return;
+      setSeconds((value) => {
+        if (value <= 1) {
+          const franchisees = dataRef.current.franchisees;
+          const next =
+            (indexRef.current + 1) % Math.max(1, franchisees.length);
+          indexRef.current = next;
+          selectedIdRef.current = franchisees[next]?.id ?? null;
+          setIndex(next);
+          return franchisees[next]
+            ? CONTACT_ATTENTION_CONFIG[franchisees[next].attention]
+                .carouselSeconds
+            : carouselSecondsRef.current;
+        }
+        return value - 1;
+      });
+    }, 1000);
     return () => window.clearInterval(interval);
-  }, [currentAttention.carouselSeconds, data.franchisees.length]);
+  }, []);
   const list = useMemo(
     () =>
       data.franchisees.map(({ id, name, unitName, photoUrl, members }) => ({
@@ -341,12 +377,20 @@ export default function TVPage() {
     const target = data.franchisees.findIndex((item) => item.id === id);
     if (target >= 0) {
       setCurrentData(null);
+      indexRef.current = target;
+      selectedIdRef.current = id;
       setIndex(target);
       setSeconds(
         CONTACT_ATTENTION_CONFIG[data.franchisees[target].attention]
           .carouselSeconds,
       );
     }
+  };
+  const togglePaused = () => {
+    const nextPaused = !pausedRef.current;
+    pausedRef.current = nextPaused;
+    setPaused(nextPaused);
+    if (!nextPaused) setSeconds(currentAttention.carouselSeconds);
   };
   const registerInstantly = useCallback(
     (
@@ -519,8 +563,8 @@ export default function TVPage() {
                       {currentAttention.emoji} {currentAttention.label}
                     </span>
                   </div>
-                  <p className="mt-3 text-right text-sm text-white/70">
-                    Próxima troca em {seconds}s
+                  <p className="mt-3 text-right text-sm text-white/70" aria-live="polite">
+                    {paused ? "Rotação pausada" : `Próxima troca em ${seconds}s`}
                   </p>
                   <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/20">
                     <div
@@ -660,7 +704,18 @@ export default function TVPage() {
                       />
                     ))}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={togglePaused}
+                      aria-label={paused ? "Continuar rotação automática" : "Pausar rotação automática"}
+                      aria-pressed={paused}
+                      title={paused ? "Continuar rotação automática" : "Pausar rotação automática"}
+                      className={`inline-flex h-11 shrink-0 items-center gap-2 rounded-full border px-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b8ee35] ${paused ? "border-[#b8ee35] bg-[#b8ee35] text-[#003b71]" : "border-white/20 bg-white/10 text-white"}`}
+                    >
+                      {paused ? <Play className="h-4 w-4" aria-hidden="true" /> : <Pause className="h-4 w-4" aria-hidden="true" />}
+                      {paused ? "Continuar" : "Pausar"}
+                    </button>
                     <button
                       onClick={() =>
                         select(

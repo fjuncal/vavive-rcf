@@ -10,6 +10,8 @@ import {
   LayoutDashboard,
   LayoutGrid,
   LogOut,
+  Pause,
+  Play,
   Sparkles,
   Users,
 } from "lucide-react";
@@ -66,21 +68,23 @@ type TVData = {
 const empty: TVData = { periodLabel: "", franchisees: [], birthdays: [] };
 const TV_DATA_REFRESH_MS = 60_000;
 
-function getRotationSeconds(
-  franchisees: Franchisee[],
-  start: number,
-  slots: Slots,
-) {
-  if (!franchisees.length) return 12;
+function getPageIds(franchisees: Franchisee[], start: number, slots: Slots) {
+  if (!franchisees.length) return [];
+  return Array.from(
+    { length: Math.min(slots, franchisees.length) },
+    (_, offset) => franchisees[(start + offset) % franchisees.length].id,
+  );
+}
+
+function getRotationSecondsForIds(franchisees: Franchisee[], ids: string[]) {
   return Math.max(
     12,
-    ...Array.from(
-      { length: Math.min(slots, franchisees.length) },
-      (_, offset) =>
-        CONTACT_ATTENTION_CONFIG[
-          franchisees[(start + offset) % franchisees.length].attention
-        ].carouselSeconds,
-    ),
+    ...ids.map((id) => {
+      const franchisee = franchisees.find((item) => item.id === id);
+      return franchisee
+        ? CONTACT_ATTENTION_CONFIG[franchisee.attention].carouselSeconds
+        : 12;
+    }),
   );
 }
 
@@ -96,23 +100,25 @@ export function TVMultiCarousel({ slots }: { slots: Slots }) {
   const router = useRouter();
   const [data, setData] = useState<TVData>(empty);
   const [period, setPeriod] = useState<TVPeriod>("last_30_days");
-  const [start, setStart] = useState(0);
+  const [visibleIds, setVisibleIds] = useState<string[]>([]);
+  const [paused, setPaused] = useState(false);
   const [role, setRole] = useState<string | null>(null);
   const refreshRequest = useRef<AbortController | null>(null);
   const refreshSequence = useRef(0);
   const dataRef = useRef<TVData>(empty);
   const startRef = useRef(0);
+  const visibleIdsRef = useRef<string[]>([]);
+  const pausedRef = useRef(false);
   const rotationSecondsRef = useRef(12);
-  const previousStartRef = useRef(0);
   const visible = useMemo(() => {
-    if (!data.franchisees.length) return [];
-    return Array.from(
-      { length: Math.min(slots, data.franchisees.length) },
-      (_, offset) =>
-        data.franchisees[(start + offset) % data.franchisees.length],
-    );
-  }, [data.franchisees, slots, start]);
-  const rotationSeconds = getRotationSeconds(data.franchisees, start, slots);
+    return visibleIds
+      .map((id) => data.franchisees.find((item) => item.id === id))
+      .filter((item): item is Franchisee => Boolean(item));
+  }, [data.franchisees, visibleIds]);
+  const rotationSeconds = getRotationSecondsForIds(
+    data.franchisees,
+    visibleIds,
+  );
   const [seconds, setSeconds] = useState(rotationSeconds);
 
   const refresh = useCallback(async () => {
@@ -134,29 +140,39 @@ export function TVMultiCarousel({ slots }: { slots: Slots }) {
       if (controller.signal.aborted || sequence !== refreshSequence.current) return;
 
       const previous = dataRef.current;
+      const previousIds = visibleIdsRef.current.length
+        ? visibleIdsRef.current
+        : getPageIds(previous.franchisees, startRef.current, slots);
+      const nextCount = Math.min(slots, next.franchisees.length);
+      const nextIds = new Set(next.franchisees.map((item) => item.id));
+      const preservedIds = previousIds.filter((id) => nextIds.has(id));
+      const fallbackStart = Math.max(
+        0,
+        next.franchisees.findIndex((item) => item.id === previousIds[0]),
+      );
+      const fallbackIds = getPageIds(next.franchisees, fallbackStart, slots);
+      const nextVisibleIds = [
+        ...preservedIds,
+        ...fallbackIds.filter((id) => !preservedIds.includes(id)),
+      ].slice(0, nextCount);
+      const nextStart = next.franchisees.findIndex(
+        (item) => item.id === nextVisibleIds[0],
+      );
+      const nextRotationSeconds = getRotationSecondsForIds(
+        next.franchisees,
+        nextVisibleIds,
+      );
       dataRef.current = next;
       setData(next);
-      setStart((current) => {
-        if (!next.franchisees.length) {
-          startRef.current = 0;
-          return 0;
-        }
-        const nextStart = current < next.franchisees.length
-          ? current
-          : current % next.franchisees.length;
-        startRef.current = nextStart;
-        return nextStart;
-      });
-
-      const nextRotationSeconds = getRotationSeconds(
-        next.franchisees,
-        startRef.current,
-        slots,
-      );
+      visibleIdsRef.current = nextVisibleIds;
+      setVisibleIds(nextVisibleIds);
+      startRef.current = nextStart >= 0 ? nextStart : 0;
       setSeconds((current) =>
         previous.franchisees.length === 0 && next.franchisees.length > 0
           ? nextRotationSeconds
-          : Math.min(current, nextRotationSeconds),
+          : pausedRef.current
+            ? current
+            : Math.min(current, nextRotationSeconds),
       );
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError"))
@@ -181,9 +197,8 @@ export function TVMultiCarousel({ slots }: { slots: Slots }) {
 
   useEffect(() => {
     dataRef.current = data;
-    startRef.current = start;
     rotationSecondsRef.current = rotationSeconds;
-  }, [data, rotationSeconds, start]);
+  }, [data, rotationSeconds]);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -192,39 +207,60 @@ export function TVMultiCarousel({ slots }: { slots: Slots }) {
       .catch(() => setRole(null));
   }, []);
 
-  useEffect(() => {
-    const changedPage = previousStartRef.current !== start;
-    previousStartRef.current = start;
-    if (changedPage && dataRef.current.franchisees.length)
-      setSeconds(rotationSeconds);
-  }, [rotationSeconds, start]);
+  const advance = useCallback(
+    (direction: -1 | 1, resetTimer = true) => {
+      const franchisees = dataRef.current.franchisees;
+      if (!franchisees.length) return;
+      const anchorId = direction === 1
+        ? visibleIdsRef.current[visibleIdsRef.current.length - 1]
+        : visibleIdsRef.current[0];
+      const currentIndex = franchisees.findIndex(
+        (item) => item.id === anchorId,
+      );
+      const baseIndex = currentIndex >= 0 ? currentIndex : startRef.current;
+      const rawNextStart = baseIndex + (direction === 1 ? 1 : -slots);
+      const nextStart =
+        ((rawNextStart % franchisees.length) + franchisees.length) %
+        franchisees.length;
+      const nextIds = getPageIds(franchisees, nextStart, slots);
+      const nextRotationSeconds = getRotationSecondsForIds(franchisees, nextIds);
+      startRef.current = nextStart;
+      visibleIdsRef.current = nextIds;
+      setVisibleIds(nextIds);
+      rotationSecondsRef.current = nextRotationSeconds;
+      if (resetTimer) {
+        setSeconds(nextRotationSeconds);
+      }
+    },
+    [slots],
+  );
 
   useEffect(() => {
     const interval = window.setInterval(() => {
+      if (pausedRef.current) return;
       setSeconds((value) => {
         if (value <= 1) {
-          setStart((current) => {
-            const nextStart =
-              (current + slots) % Math.max(1, dataRef.current.franchisees.length);
-            startRef.current = nextStart;
-            return nextStart;
-          });
+          advance(1, false);
           return rotationSecondsRef.current;
         }
         return value - 1;
       });
     }, 1000);
     return () => window.clearInterval(interval);
-  }, [slots]);
+  }, [advance]);
 
-  const advance = (direction: -1 | 1) => {
-    setStart((current) => {
-      const nextStart =
-        (current + direction * slots + data.franchisees.length) %
-        Math.max(1, data.franchisees.length);
-      startRef.current = nextStart;
-      return nextStart;
-    });
+  const togglePaused = () => {
+    const nextPaused = !pausedRef.current;
+    pausedRef.current = nextPaused;
+    setPaused(nextPaused);
+    if (!nextPaused) {
+      setSeconds(
+        getRotationSecondsForIds(
+          dataRef.current.franchisees,
+          visibleIdsRef.current,
+        ),
+      );
+    }
   };
 
   const registerInstantly = useCallback(
@@ -329,8 +365,8 @@ export function TVMultiCarousel({ slots }: { slots: Slots }) {
               <Users className="h-4 w-4 text-[#b8ee35]" />
               Exibindo {visible.length} de {data.franchisees.length} franqueados
             </span>
-            <span className="text-sm text-white/75">
-              Próxima troca em {seconds}s
+            <span className="text-right text-sm text-white/75" aria-live="polite">
+              {paused ? "Rotação pausada" : `Próxima troca em ${seconds}s`}
             </span>
           </div>
           <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/20">
@@ -373,6 +409,17 @@ export function TVMultiCarousel({ slots }: { slots: Slots }) {
         )}
 
         <footer className="flex items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={togglePaused}
+            aria-label={paused ? "Continuar rotação automática" : "Pausar rotação automática"}
+            aria-pressed={paused}
+            title={paused ? "Continuar rotação automática" : "Pausar rotação automática"}
+            className={`inline-flex h-11 shrink-0 items-center gap-2 rounded-full border px-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0b8f45] ${paused ? "border-[#0b8f45] bg-[#dff3df] text-[#003b71]" : "border-slate-200 bg-white text-[#003b71]"}`}
+          >
+            {paused ? <Play className="h-4 w-4" aria-hidden="true" /> : <Pause className="h-4 w-4" aria-hidden="true" />}
+            {paused ? "Continuar" : "Pausar"}
+          </button>
           <button
             onClick={() => advance(-1)}
             aria-label="Franqueados anteriores"
