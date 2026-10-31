@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { OPERATIONS_ROLES, requireAnyRole } from "@/services/auth";
 import { prisma } from "@/lib/db";
@@ -6,6 +7,11 @@ import { civilDateToUTCDate, isValidCivilDate } from "@/lib/utils";
 import { monthlyServiceCountInputSchema } from "@/services/monthly-service-counts";
 import { photoUrlSchema } from "@/domain/franchisee";
 import { birthDateSchema, birthDateToUTCDate } from "@/domain/birthdays";
+import {
+  getPrimaryMemberId,
+  getPrimarySwapDates,
+  validatePrimaryMemberSelection,
+} from "@/domain/franchisee-members";
 
 const schema = z.object({
   name: z.string("Nome é obrigatório.").min(2, "Nome é obrigatório."),
@@ -14,6 +20,7 @@ const schema = z.object({
     .min(2, "Nome da unidade é obrigatório."),
   photoUrl: photoUrlSchema,
   primaryMemberBirthDate: birthDateSchema,
+  primaryMemberId: z.string().min(1).optional(),
   moment: z.enum(["IMPLANTACAO", "INAUGURADA"], "Momento da unidade inválido."),
   active: z.boolean("Status da unidade inválido.").default(true),
 });
@@ -112,6 +119,28 @@ function validationMessage(error: z.ZodError) {
   return "Dados inválidos.";
 }
 
+class PrimaryChangeError extends Error {
+  constructor(
+    message: string,
+    readonly status: 400 | 404 | 409,
+  ) {
+    super(message);
+  }
+}
+
+function primaryChangeMessage(reason: ReturnType<typeof validatePrimaryMemberSelection>) {
+  switch (reason) {
+    case "member_not_found":
+      return "Responsável não encontrado.";
+    case "member_not_in_unit":
+      return "O responsável selecionado não pertence a esta unidade.";
+    case "member_inactive":
+      return "Responsável inativo não pode ser principal.";
+    default:
+      return "Responsável principal inválido.";
+  }
+}
+
 export async function GET() {
   // Lista enxuta para o seletor "Unidade existente" de /franqueados/new.
   // Mesma permissão de criação (OPERATIONS_ROLES): backend é autoridade.
@@ -128,7 +157,7 @@ export async function GET() {
       moment: true,
       active: true,
       members: {
-        orderBy: { createdAt: "asc" },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         select: { id: true, name: true },
       },
     },
@@ -253,37 +282,60 @@ export async function PUT(request: Request) {
     if (!isSuperAdmin && hasMonthlyCountKey(body))
       return monthlyCountForbiddenMessage();
     const payload = (isSuperAdmin ? schemaWithDates : schema).parse(body);
-    const franchisee = await prisma.franchisee.update({
-      where: { id },
-      data: {
-        name: payload.name,
-        unitName: payload.unitName,
-        photoUrl: payload.photoUrl || null,
-        moment: payload.moment,
-        active: payload.active,
-        ...(isSuperAdmin
-          ? {
-              joinedNetworkAt: toNullableDate(
-                (payload as z.infer<typeof schemaWithDates>).joinedNetworkAt,
-              ),
-              inauguratedAt: toNullableDate(
-                (payload as z.infer<typeof schemaWithDates>).inauguratedAt,
-              ),
-            }
-          : {}),
-      },
-    });
-    // Transição compatível: Franchisee.name/photoUrl continuam sendo a
-    // referência da pessoa principal; espelha na pessoa mais antiga.
-    const primary = await prisma.franchiseeMember.findFirst({
-      where: { franchiseeId: id },
-      orderBy: { createdAt: "asc" },
-      select: { id: true },
-    });
-    if (primary) {
-      await prisma.franchiseeMember.update({
-        where: { id: primary.id },
-        data: {
+    const franchisee = await prisma.$transaction(
+      async (tx) => {
+        const members = await tx.franchiseeMember.findMany({
+          where: { franchiseeId: id },
+          select: {
+            id: true,
+            franchiseeId: true,
+            name: true,
+            photoUrl: true,
+            birthDate: true,
+            active: true,
+            createdAt: true,
+          },
+        });
+        const currentPrimaryId = getPrimaryMemberId(members);
+        const requestedPrimaryId = payload.primaryMemberId ?? currentPrimaryId;
+
+        if (
+          payload.primaryMemberId &&
+          payload.primaryMemberId !== currentPrimaryId
+        ) {
+          const requestedMember = await tx.franchiseeMember.findUnique({
+            where: { id: payload.primaryMemberId },
+            select: { id: true, franchiseeId: true, active: true },
+          });
+          const reason = validatePrimaryMemberSelection({
+            memberExists: Boolean(requestedMember),
+            memberFranchiseeId: requestedMember?.franchiseeId ?? null,
+            franchiseeId: id,
+            memberActive: requestedMember?.active ?? false,
+          });
+          if (reason) {
+            const status =
+              reason === "member_not_found"
+                ? 404
+                : 400;
+            throw new PrimaryChangeError(primaryChangeMessage(reason), status);
+          }
+        }
+
+        const primaryMember = members.find(
+          (member) => member.id === currentPrimaryId,
+        );
+        const selectedMember = members.find(
+          (member) => member.id === requestedPrimaryId,
+        );
+        if (requestedPrimaryId && !selectedMember) {
+          throw new PrimaryChangeError(
+            "O responsável selecionado não pertence a esta unidade.",
+            400,
+          );
+        }
+
+        const primaryMemberData = {
           name: payload.name,
           photoUrl: payload.photoUrl || null,
           ...(payload.primaryMemberBirthDate !== undefined
@@ -291,15 +343,74 @@ export async function PUT(request: Request) {
                 birthDate: birthDateToUTCDate(payload.primaryMemberBirthDate),
               }
             : {}),
-        },
-      });
-    }
+        };
+
+        if (
+          primaryMember &&
+          selectedMember &&
+          primaryMember.id !== selectedMember.id
+        ) {
+          const swapDates = getPrimarySwapDates(primaryMember, selectedMember);
+          await tx.franchiseeMember.update({
+            where: { id: selectedMember.id },
+            data: {
+              ...primaryMemberData,
+              createdAt: swapDates.promotedCreatedAt,
+            },
+          });
+          await tx.franchiseeMember.update({
+            where: { id: primaryMember.id },
+            data: { createdAt: swapDates.demotedCreatedAt },
+          });
+        } else if (primaryMember) {
+          await tx.franchiseeMember.update({
+            where: { id: primaryMember.id },
+            data: primaryMemberData,
+          });
+        }
+
+        return tx.franchisee.update({
+          where: { id },
+          data: {
+            name: payload.name,
+            unitName: payload.unitName,
+            photoUrl: payload.photoUrl || null,
+            moment: payload.moment,
+            active: payload.active,
+            ...(isSuperAdmin
+              ? {
+                  joinedNetworkAt: toNullableDate(
+                    (payload as z.infer<typeof schemaWithDates>).joinedNetworkAt,
+                  ),
+                  inauguratedAt: toNullableDate(
+                    (payload as z.infer<typeof schemaWithDates>).inauguratedAt,
+                  ),
+                }
+              : {}),
+          },
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
     return NextResponse.json(franchisee);
   } catch (error) {
     if (error instanceof z.ZodError)
       return NextResponse.json(
         { message: validationMessage(error) },
         { status: 400 },
+      );
+    if (error instanceof PrimaryChangeError)
+      return NextResponse.json(
+        { message: error.message },
+        { status: error.status },
+      );
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2034"
+    )
+      return NextResponse.json(
+        { message: "A alteração sofreu uma concorrência. Tente novamente." },
+        { status: 409 },
       );
     return NextResponse.json(
       { message: "Erro ao editar franqueado." },

@@ -8,6 +8,7 @@ import {
   OPERATIONS_ROLES,
 } from "@/services/auth";
 import { birthDateSchema, birthDateToUTCDate } from "@/domain/birthdays";
+import { getPrimaryMemberId } from "@/domain/franchisee-members";
 import { toDateInputValue } from "@/lib/utils";
 
 const memberSelect = {
@@ -124,4 +125,69 @@ export async function PUT(
   });
 
   return NextResponse.json(serializeMember(updatedMember));
+}
+
+class MemberActionError extends Error {
+  constructor(
+    message: string,
+    readonly status: 400 | 404 | 409,
+  ) {
+    super(message);
+  }
+}
+
+export async function DELETE(
+  _: Request,
+  { params }: { params: Promise<{ id: string; memberId: string }> },
+) {
+  const user = await getSessionUser();
+  if (!user) {
+    return NextResponse.json(
+      { message: "Sessão inválida ou expirada." },
+      { status: 401 },
+    );
+  }
+  if (!hasAnyRole(user, OPERATIONS_ROLES)) {
+    return NextResponse.json({ message: "Sem permissão." }, { status: 403 });
+  }
+
+  const { id: franchiseeId, memberId } = await params;
+  try {
+    await prisma.$transaction(async (tx) => {
+      const member = await tx.franchiseeMember.findFirst({
+        where: { id: memberId, franchiseeId },
+        select: { id: true, franchiseeId: true },
+      });
+      if (!member) {
+        throw new MemberActionError(
+          "Responsável não encontrado nesta unidade.",
+          404,
+        );
+      }
+
+      const members = await tx.franchiseeMember.findMany({
+        where: { franchiseeId },
+        select: { id: true, createdAt: true },
+      });
+      if (getPrimaryMemberId(members) === member.id) {
+        throw new MemberActionError(
+          "O responsável principal não pode ser removido por este fluxo.",
+          409,
+        );
+      }
+
+      // Contact e LiveParticipant referenciam membro com SET NULL.
+      // Unidade e registros operacionais permanecem intactos.
+      await tx.franchiseeMember.delete({ where: { id: member.id } });
+    });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    if (error instanceof MemberActionError) {
+      return NextResponse.json({ message: error.message }, { status: error.status });
+    }
+    return NextResponse.json(
+      { message: "Não foi possível remover o vínculo." },
+      { status: 500 },
+    );
+  }
 }

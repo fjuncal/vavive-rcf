@@ -6,8 +6,9 @@ import { fallbackFranchisees } from "@/lib/fallback-data";
 import { FRANCHISE_MOMENT_LABELS, MONTH_LABELS } from "@/lib/constants";
 import { formatCivilDate, formatDate } from "@/lib/utils";
 import { getDaysWithoutContact } from "@/lib/contact-attention";
-import { getSessionUser } from "@/services/auth";
+import { getSessionUser, hasAnyRole, OPERATIONS_ROLES } from "@/services/auth";
 import { DeleteFranchiseeAction } from "@/components/franchisees/delete-franchisee-action";
+import { FranchiseeMembersDialog } from "@/components/franchisees/franchisee-members-dialog";
 import { birthdayMatchesMonthDay } from "@/domain/birthdays";
 
 const PAGE_SIZE = 20;
@@ -17,6 +18,12 @@ type TableMember = {
   id: string;
   name: string;
   birthDate: Date | null;
+  active: boolean;
+};
+
+type TransferUnit = {
+  id: string;
+  unitName: string;
   active: boolean;
 };
 
@@ -64,33 +71,26 @@ function memberMatchesBirthday(member: TableMember, month: number, day: number |
 function BirthDateCell({ members, month, day }: { members: TableMember[]; month: number | null; day: number | null }) {
   if (!members.length) return <td className="px-4 py-3">—</td>;
   const primary = members[0];
-  const matching = month
-    ? members.filter((member) => memberMatchesBirthday(member, month, day))
-    : [];
-  const shown = Array.from(new Map([primary, ...matching].map((member) => [member.id, member])).values());
-  const hiddenCount = Math.max(0, members.length - shown.length);
+  const matches = month !== null && memberMatchesBirthday(primary, month, day);
   return (
     <td className="px-4 py-3 align-top">
-      <div className="space-y-1.5">
-        {shown.map((member, index) => {
-          const matches = month !== null && memberMatchesBirthday(member, month, day);
-          return (
-            <div key={member.id} className={`rounded-lg px-2 py-1.5 ${matches ? "bg-[#eef7ef] ring-1 ring-[#0b8f45]/20" : ""}`}>
-              <p className="text-xs font-semibold text-slate-700">
-                {index === 0 ? "Principal" : member.name}
-                {!member.active ? " · inativa" : ""}
-              </p>
-              <p className={`text-sm ${matches ? "font-bold text-[#0b8f45]" : "text-slate-600"}`}>
-                {formatCivilDate(member.birthDate) || "—"}
-                {matches ? <span className="ml-1 text-[10px] uppercase tracking-wide">corresponde</span> : null}
-              </p>
-            </div>
-          );
-        })}
-        {hiddenCount ? <p className="text-xs text-slate-500">+{hiddenCount} {hiddenCount === 1 ? "pessoa" : "pessoas"}</p> : null}
-      </div>
+      <p className={`text-sm ${matches ? "font-bold text-[#0b8f45]" : "text-slate-600"}`}>
+        {formatCivilDate(primary.birthDate) || "—"}
+        {matches ? <span className="ml-1 text-[10px] uppercase tracking-wide">corresponde</span> : null}
+      </p>
     </td>
   );
+}
+
+async function getTransferUnits(): Promise<TransferUnit[]> {
+  try {
+    return await prisma.franchisee.findMany({
+      orderBy: [{ active: "desc" }, { unitName: "asc" }],
+      select: { id: true, unitName: true, active: true },
+    });
+  } catch {
+    return [];
+  }
 }
 
 async function getFranchiseesPage(query: string, requestedPage: number, birthdayMonth: number | null, birthdayDay: number | null) {
@@ -210,11 +210,13 @@ export default async function FranchiseesPage({
     1,
     Number.parseInt(params.page ?? "1", 10) || 1,
   );
-  const [{ franchisees, page, pages, total }, user] = await Promise.all([
+  const [{ franchisees, page, pages, total }, user, transferUnits] = await Promise.all([
     getFranchiseesPage(query, requestedPage, birthdayMonth, birthdayDay),
     getSessionUser(),
+    getTransferUnits(),
   ]);
   const isSuperAdmin = user?.role === "SUPERADMIN";
+  const canManageMembers = !!user && hasAnyRole(user, OPERATIONS_ROLES);
 
   return (
     <div className="space-y-6">
@@ -277,13 +279,13 @@ export default async function FranchiseesPage({
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="min-w-[980px] w-full divide-y divide-slate-200">
+          <table className="min-w-[900px] w-full divide-y divide-slate-200">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.14em] text-slate-500">
               <tr>
                 <th className="px-4 py-3">Foto</th>
-                <th className="px-4 py-3">Nome</th>
+                <th className="px-4 py-3">Responsáveis</th>
                 <th className="px-4 py-3">Unidade</th>
-                <th className="px-4 py-3">Nascimento</th>
+                <th className="px-4 py-3">Nascimento principal</th>
                 <th className="px-4 py-3">Momento</th>
                 <th className="px-4 py-3">Último contato</th>
                 <th className="px-4 py-3">Dias sem contato</th>
@@ -304,8 +306,35 @@ export default async function FranchiseesPage({
                       className="h-11 w-11 rounded-full object-cover"
                     />
                   </td>
-                  <td className="px-4 py-3 font-medium text-slate-900">
-                    {franchisee.name}
+                  <td className="px-4 py-3 align-top font-medium text-slate-900">
+                    <p className="max-w-[220px] truncate">
+                      {franchisee.members[0]?.name ?? franchisee.name}
+                    </p>
+                    <p className="mt-1 text-xs font-medium text-slate-500">
+                      Principal · {franchisee.members.length || 1} {(franchisee.members.length || 1) === 1 ? "responsável" : "responsáveis"}
+                    </p>
+                    <FranchiseeMembersDialog
+                      franchiseeId={franchisee.id}
+                      unitName={franchisee.unitName}
+                      initialMembers={(franchisee.members.length
+                        ? franchisee.members
+                        : [
+                            {
+                              id: `legacy-${franchisee.id}`,
+                              name: franchisee.name,
+                              birthDate: null,
+                              active: true,
+                            },
+                          ]
+                      ).map((member) => ({
+                        id: member.id,
+                        name: member.name,
+                        birthDate: member.birthDate?.toISOString() ?? null,
+                        active: member.active,
+                      }))}
+                      units={transferUnits}
+                      canManage={canManageMembers}
+                    />
                   </td>
                   <td className="px-4 py-3">{franchisee.unitName}</td>
                   <BirthDateCell
@@ -349,7 +378,7 @@ export default async function FranchiseesPage({
                       >
                         Ver
                       </Link>
-                      {user?.role !== "TV" ? (
+                      {canManageMembers ? (
                         <Link
                           href={`/franqueados/${franchisee.id}/editar`}
                           className="font-semibold text-[var(--brand-secondary)] hover:underline"

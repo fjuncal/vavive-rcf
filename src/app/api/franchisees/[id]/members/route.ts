@@ -70,7 +70,7 @@ export async function GET(
   // Pessoa principal (backfill) primeiro: ordem de criação.
   const members = await prisma.franchiseeMember.findMany({
     where: { franchiseeId: id },
-    orderBy: { createdAt: "asc" },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     select: memberSelect,
   });
   return NextResponse.json(members.map(serializeMember));

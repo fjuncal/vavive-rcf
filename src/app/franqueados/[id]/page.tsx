@@ -105,7 +105,7 @@ export default async function FranchiseeDetailPage({
     canManageMembers
       ? prisma.franchiseeMember.findMany({
           where: { franchiseeId: id },
-          orderBy: { createdAt: "asc" },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
           select: {
             id: true,
             name: true,
